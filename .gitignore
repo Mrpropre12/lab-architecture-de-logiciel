@@ -12,3 +12,9 @@ Partie_2/code/donnees/
 
 # Source Word du rapport : seule la version PDF est remise
 Partie_2/*.docx
+
+# Environnements virtuels et archives de remise
+.venv/
+*.zip
+Laboratoire_3/*.docx
+Laboratoire_3/*.pdf

@@ -1,12 +1,15 @@
-# Laboratoire 2 : système de gestion de tickets (6GEI311)
+# Laboratoires 2 et 3 : système de gestion de tickets (6GEI311)
 
 Cours 6GEI311 Architecture des logiciels, UQAC, automne 2026.
 Équipe : Christian Kevin Sawadogo et Jeremie Soppewe Arno Tchawo.
 
-Ce dépôt contient les deux parties du laboratoire 2 :
+Ce dépôt contient les deux parties du laboratoire 2, puis le laboratoire 3 :
 
 - **Partie 1** (`Partie_1/`) : l'implémentation en Python du diagramme de classes fourni par l'énoncé, avec un programme principal interactif ;
-- **Partie 2** (`Partie_2/`) : la conception améliorée. La description d'un ticket accepte du texte, des images et des vidéos ; elle se consulte à l'écran ou s'exporte en PDF. Le dossier contient aussi le nouveau diagramme et le rapport.
+- **Partie 2** (`Partie_2/`) : la conception améliorée. La description d'un ticket accepte du texte, des images et des vidéos ; elle se consulte à l'écran ou s'exporte en PDF. Le dossier contient aussi le nouveau diagramme et le rapport ;
+- **Laboratoire 3** (`Laboratoire_3/`) : une interface graphique PySide6 branchée sur le modèle de la partie 2, conforme à WCAG 2.2 niveau AA. Son [README](Laboratoire_3/code/README.md) tient lieu de rapport : installation, architecture, connexion, accessibilité, captures de toutes les fenêtres, vérification et leçons.
+
+Le reste de ce document porte sur le laboratoire 2.
 
 ## Sommaire
 
@@ -304,6 +307,8 @@ lab2-architecture-de-logiciel/
 │   ├── diagramme_uml.png         diagramme de classes amélioré
 │   ├── diagramme_uml.puml        son source PlantUML
 │   └── Rapport_Lab2_6GEI311.pdf  rapport (critique, justifications, leçons)
+├── Laboratoire_3/
+│   └── code/                     interface graphique, modèle, tests ; son README sert de rapport
 ├── docs/
 │   ├── Description_partie_1.pdf  énoncé de la partie 1
 │   ├── Enonce_Lab2_6GEI311.pdf   énoncé complet du laboratoire 2
