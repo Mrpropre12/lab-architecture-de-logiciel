@@ -56,3 +56,11 @@ Le registre des comptes est injecté dans le registre des tickets : `TicketRegis
 | `[0..1]` | `None` possible |
 
 Une action refusée renvoie `False`, `None` ou une liste vide, sans effet de bord. Son motif est écrit dans le journal (`logging`), et la console l'affiche.
+
+## Tests
+
+```
+python -m unittest discover -s tests
+```
+
+157 tests vérifient la conformité au diagramme `../diagramme_uml.puml`, le sens des dépendances entre paquets et les règles métier. Sans fpdf2, les tests du PDF sont ignorés.

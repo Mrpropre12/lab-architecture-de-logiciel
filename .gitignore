@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# Éditeurs
+.vs/
+.vscode/
+.idea/
+
+# Fichiers créés au lancement (fichiers de départ, téléversements, exports PDF)
+Partie_2/code/donnees/
+
+# Source Word du rapport : seule la version PDF est remise
+Partie_2/*.docx

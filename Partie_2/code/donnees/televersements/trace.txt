@@ -1,3 +1,0 @@
-Traceback (most recent call last):
-  File "portail.py", line 42
-KeyError: 'session'
