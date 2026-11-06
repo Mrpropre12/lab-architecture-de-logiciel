@@ -7,6 +7,7 @@ Definition OpenAPI : /openapi.json ; documentation interactive : /docs.
 import os
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import reponses, routes_comptes, routes_tickets
@@ -56,6 +57,10 @@ def creer_api(users, tickets, dossier_televersement: str, secret: str = None, we
     app.include_router(routes_tickets.routeur, prefix=PREFIXE)
     if web and os.path.isdir(WEB):
         app.mount("/", StaticFiles(directory=WEB, html=True), name="web")
+    else:  # sans page web, la racine mene a la documentation interactive
+        @app.get("/", include_in_schema=False)
+        def racine():
+            return RedirectResponse("/docs")
     return app
 
 

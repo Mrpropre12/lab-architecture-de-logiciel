@@ -13,7 +13,7 @@ import sys
 
 from donnees_demo import COMPTES_DEMO
 
-SERVEUR_PAR_DEFAUT = os.environ.get("TICKETS_SERVEUR", "https://tickets-6gei311.onrender.com")
+SERVEUR_PAR_DEFAUT = os.environ.get("TICKETS_SERVEUR", "https://gestion-tickets-zmfy.onrender.com")
 
 
 def lire_arguments(argv):

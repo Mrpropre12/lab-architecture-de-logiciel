@@ -300,6 +300,10 @@ class TestService(Base):
         self.refus(self.http.post(f"{API}/sessions", content=b"pas du json",
                                   headers={"Content-Type": "application/json"}), 422, "INVALIDE")
 
+    def test_racine_sans_page_web(self):
+        r = self.http.get("/", follow_redirects=False)
+        self.assertEqual((r.status_code, r.headers["location"]), (307, "/docs"))
+
     def test_definition_openapi(self):
         chemins = set(self.http.get("/openapi.json").json()["paths"])
         attendus = {"/sessions", "/moi", "/comptes", "/comptes/{numero}", "/comptes/{numero}/roles",
