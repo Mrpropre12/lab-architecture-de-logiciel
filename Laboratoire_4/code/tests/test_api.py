@@ -112,7 +112,7 @@ class TestComptes(Base):
     def test_inscription(self):
         corps = {"nom": "Nina", "courriel": "nina@uqac.ca", "mot_de_passe": "nina-2026", "confirmation": "nina-2026"}
         r = self.http.post(f"{API}/comptes", json=corps)
-        self.assertEqual((r.status_code, r.json()), (201, {"nom": "Nina"}))
+        self.assertEqual((r.status_code, r.json()["nom"]), (201, "Nina"))
         self.assertIn("deja utilise", self.refus(self.http.post(f"{API}/comptes", json=corps), 422, "INVALIDE"))
         corps["confirmation"] = "autre"
         self.refus(self.http.post(f"{API}/comptes", json=corps), 422, "INVALIDE")

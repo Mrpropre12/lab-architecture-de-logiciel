@@ -54,7 +54,9 @@ class Inscription(BaseModel):
 
 
 class Inscrit(BaseModel):
+    """Nom du compte concerne, et remarques du service (ex. : le compte s'est desactive lui-meme)."""
     nom: str
+    details: List[str] = []
 
 
 class CompteJSON(BaseModel):
@@ -69,7 +71,8 @@ class ModifCompte(BaseModel):
 
 
 class NouveauRole(BaseModel):
-    role: Literal["Rapporteur", "Developpeur", "Administrateur"]
+    """Le nom est verifie par le service (motif « role inconnu ») : un seul endroit decide."""
+    role: str = Field(description="Rapporteur, Developpeur ou Administrateur", examples=["Developpeur"])
 
 
 # ------------------------------------------------ tickets

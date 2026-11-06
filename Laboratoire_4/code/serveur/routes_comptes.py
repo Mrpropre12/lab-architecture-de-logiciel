@@ -56,7 +56,7 @@ def modifier_compte(numero: int, corps: s.ModifCompte, compte: User = Depends(co
                     n: Noyau = Depends(noyau)):
     with n.services(compte) as (_, comptes, _t):
         r = comptes.reactiver(numero) if corps.actif else comptes.desactiver(numero)
-        return s.Inscrit(nom=exiger(r))
+        return s.Inscrit(nom=exiger(r), details=list(r.details))
 
 
 @routeur.post("/comptes/{numero}/roles", status_code=201, response_model=s.Inscrit, tags=["comptes"],
