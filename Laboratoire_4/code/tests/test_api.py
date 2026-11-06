@@ -300,6 +300,27 @@ class TestService(Base):
         self.refus(self.http.post(f"{API}/sessions", content=b"pas du json",
                                   headers={"Content-Type": "application/json"}), 422, "INVALIDE")
 
+    def test_page_web_servie_avec_l_api(self):
+        from gestion_tickets.acteurs import UserRegistry
+        from gestion_tickets.ticket import TicketRegistry
+        users = UserRegistry("Admin", "admin@uqac.ca", "admin-web-2026")
+        http = TestClient(creer_api(users, TicketRegistry(users), tempfile.mkdtemp(), secret=SECRET, web=True))
+        page = http.get("/")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Gestionnaire de tickets", page.text)
+        self.assertIn("Content-Security-Policy", page.text)
+        self.assertEqual(http.get("/app.js").status_code, 200)
+        self.assertEqual(http.get(f"{API}/sante").status_code, 200)  # l'API passe avant la page web
+        self.refus(http.get(f"{API}/inexistant"), 404, "INTROUVABLE")
+
+    def test_aucun_innerhtml_dans_la_page_web(self):
+        """Les donnees recues ne deviennent jamais du HTML : pas d'injection de script possible."""
+        chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "web", "app.js")
+        with open(chemin, encoding="utf-8") as f:
+            source = f.read()
+        for interdit in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval("):
+            self.assertNotIn(interdit, source)
+
     def test_racine_sans_page_web(self):
         r = self.http.get("/", follow_redirects=False)
         self.assertEqual((r.status_code, r.headers["location"]), (307, "/docs"))
