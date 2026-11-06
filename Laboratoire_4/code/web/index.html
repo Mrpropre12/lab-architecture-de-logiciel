@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <title>Gestionnaire de tickets</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a class="evitement" href="#principal">Aller au contenu</a>
+  <header class="entete">
+    <h1>Gestionnaire de tickets</h1>
+    <div id="compte" class="compte" hidden>
+      <span id="compte-nom"></span>
+      <button type="button" id="deconnexion">Se déconnecter</button>
+    </div>
+  </header>
+
+  <div id="bandeau" class="bandeau" role="status" aria-live="polite" hidden></div>
+
+  <main id="principal" tabindex="-1">
+    <!-- Connexion -->
+    <section id="vue-connexion" class="carte connexion" aria-labelledby="titre-connexion" hidden>
+      <h2 id="titre-connexion">Connexion</h2>
+      <form id="form-connexion" novalidate>
+        <label for="courriel">Courriel</label>
+        <input id="courriel" name="courriel" type="email" autocomplete="username" required>
+        <label for="mot-de-passe">Mot de passe</label>
+        <input id="mot-de-passe" name="mot_de_passe" type="password" autocomplete="current-password" required>
+        <button type="submit" class="principal">Se connecter</button>
+      </form>
+      <details class="demo">
+        <summary>Comptes de démonstration</summary>
+        <p>Mots de passe publics, pour la démonstration seulement. Un clic remplit le formulaire.</p>
+        <ul id="comptes-demo"></ul>
+      </details>
+      <p class="secondaire">Même API que l'interface PySide6 : <a href="/docs">documentation interactive</a>.</p>
+    </section>
+
+    <!-- Application -->
+    <div id="vue-app" class="app" hidden>
+      <section class="carte liste" aria-labelledby="titre-liste">
+        <div class="ligne-titre">
+          <h2 id="titre-liste">Tickets</h2>
+          <button type="button" id="ouvrir-nouveau" class="principal" hidden>Nouveau ticket</button>
+        </div>
+        <div class="onglets" role="group" aria-label="Tickets actifs ou archivés">
+          <button type="button" id="onglet-actifs" aria-pressed="true">Actifs</button>
+          <button type="button" id="onglet-archives" aria-pressed="false">Archives</button>
+        </div>
+        <form id="filtres" class="filtres">
+          <label>Afficher
+            <select id="filtre">
+              <option value="mes_tickets">Mes tickets</option>
+              <option value="assignes_a_moi">Assignés à moi</option>
+              <option value="tous">Tous les tickets</option>
+            </select>
+          </label>
+          <label>Statut
+            <select id="filtre-statut"><option value="">Tous</option></select>
+          </label>
+          <label>Priorité
+            <select id="filtre-priorite"><option value="">Toutes</option></select>
+          </label>
+        </form>
+        <form id="form-nouveau" class="nouveau" hidden aria-labelledby="titre-nouveau">
+          <h3 id="titre-nouveau">Nouveau ticket</h3>
+          <label for="nouveau-titre">Titre</label>
+          <input id="nouveau-titre" required maxlength="200">
+          <label for="nouveau-priorite">Priorité</label>
+          <select id="nouveau-priorite"></select>
+          <label for="nouveau-texte">Description (facultative)</label>
+          <textarea id="nouveau-texte" rows="3"></textarea>
+          <div class="boutons">
+            <button type="submit" class="principal">Créer</button>
+            <button type="button" id="annuler-nouveau">Annuler</button>
+          </div>
+        </form>
+        <div class="table-defilante">
+          <table id="table-tickets">
+            <caption class="visuellement-cache">Liste des tickets</caption>
+            <thead><tr><th scope="col">N°</th><th scope="col">Titre</th><th scope="col">Statut</th>
+              <th scope="col">Priorité</th><th scope="col">Auteur</th><th scope="col">Assigné</th>
+              <th scope="col">Modifié</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="liste-vide" class="secondaire" hidden>Aucun ticket.</p>
+      </section>
+
+      <section id="detail" class="carte detail" aria-labelledby="titre-detail" hidden>
+        <h2 id="titre-detail" tabindex="-1"></h2>
+        <dl id="meta" class="meta"></dl>
+        <p id="possible" class="secondaire"></p>
+        <h3>Description</h3>
+        <div id="description" class="description"></div>
+        <h3>Commentaires</h3>
+        <ol id="commentaires" class="commentaires"></ol>
+        <h3>Actions</h3>
+        <div id="actions" class="actions"></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
