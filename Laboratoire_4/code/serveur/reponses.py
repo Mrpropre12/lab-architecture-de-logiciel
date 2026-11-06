@@ -25,7 +25,11 @@ class Refus(Exception):
 
     def __init__(self, resultat: Resultat) -> None:
         super().__init__(resultat.motif)
-        self.resultat = resultat
+        self.__resultat = resultat
+
+    @property
+    def resultat(self) -> Resultat:
+        return self.__resultat
 
 
 def exiger(r: Resultat):

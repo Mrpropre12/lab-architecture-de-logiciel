@@ -11,8 +11,8 @@ pont avec les types du modele. Les memes services servent l'interface locale et 
 import os
 from typing import Callable, Iterable, Optional
 
-from contrat import (ASSIGNES_A_MOI, MES_TICKETS, ROLES, TOUS, Cause, CompteVue, DetailTicket, LigneTicket,
-                     Profil, Resultat)
+from contrat import (ASSIGNES_A_MOI, MES_TICKETS, ROLES, TOUS, Cause, CompteVue, DetailTicket, GestionComptes,
+                     GestionTickets, LigneTicket, Profil, Resultat)
 from gestion_tickets.acteurs import AdminRole, DeveloperRole, Permission, ReporterRole, User
 from gestion_tickets.consultation import DescriptionVisitor
 from gestion_tickets.ticket import Ticket
@@ -49,7 +49,7 @@ def _cause_du_refus(acteur: User, p: Permission, permises_avant: frozenset) -> C
     return Cause.INVALIDE
 
 
-class ServiceComptes:
+class ServiceComptes(GestionComptes):
 
     def __init__(self, session: Session) -> None:
         self.__session = session
@@ -139,7 +139,7 @@ class ServiceComptes:
         return self.__gerer(numero, self.__session.users.reactivate)
 
 
-class ServiceTickets:
+class ServiceTickets(GestionTickets):
 
     def __init__(self, session: Session, importateur: ImportFichiers) -> None:
         self.__session = session

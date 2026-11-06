@@ -19,10 +19,16 @@ PAQUETS = {
     "Consultation": "gestion_tickets.consultation",
     "Application": "application",
     "Contrat": "contrat",
+    "Serveur": "serveur",
+    "Client": "client",
     "Interface": "interface",
 }
 if importlib.util.find_spec("PySide6") is None:  # sans PySide6, le paquetage Interface n'est pas verifie
     del PAQUETS["Interface"]
+if importlib.util.find_spec("fastapi") is None:  # idem sans FastAPI (serveur) ou httpx (client)
+    del PAQUETS["Serveur"]
+if importlib.util.find_spec("httpx") is None:
+    del PAQUETS["Client"]
 # Classes du diagramme pas encore programmees. La liste doit etre vide a la remise.
 EN_ATTENTE = set()
 

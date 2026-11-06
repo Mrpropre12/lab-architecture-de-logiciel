@@ -9,7 +9,7 @@ import os
 from typing import Iterable
 from urllib.parse import quote
 
-from contrat import MES_TICKETS, Resultat
+from contrat import MES_TICKETS, GestionComptes, GestionTickets, Resultat
 
 from . import conversion
 from .images import CacheImages
@@ -23,7 +23,7 @@ def _ou(r: Resultat, transformer) -> Resultat:
     return Resultat.succes(transformer(r.valeur), r.details) if r.ok else r
 
 
-class ClientComptes:
+class ClientComptes(GestionComptes):
 
     def __init__(self, transport: Transport) -> None:
         self.__t = transport
@@ -57,7 +57,7 @@ class ClientComptes:
             return NON_CONNECTE
         r = _ou(self.__t.requete("GET", "/moi"), conversion.profil)
         if r.ok:
-            self.__t.profil = r.valeur
+            self.__t.retenir(r.valeur)
         return r
 
     def lister(self) -> Resultat:
@@ -91,7 +91,7 @@ class ClientComptes:
         return self.__gerer(numero, "PATCH", f"/comptes/{numero}", json={"actif": True})
 
 
-class ClientTickets:
+class ClientTickets(GestionTickets):
 
     def __init__(self, transport: Transport, images: CacheImages = None) -> None:
         self.__t = transport

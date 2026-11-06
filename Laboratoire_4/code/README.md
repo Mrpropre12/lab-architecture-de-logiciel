@@ -1,35 +1,51 @@
-# Laboratoire 3 : interface graphique du gestionnaire de tickets (6GEI311)
+# Laboratoire 4 : API REST du gestionnaire de tickets (6GEI311)
 
 Cours 6GEI311 Architecture des logiciels, UQAC, automne 2026.
 Équipe : Christian Kevin Sawadogo et Jeremie Soppewe Arno Tchawo.
 
-Une interface graphique PySide6 remplace la console du labo 2 sans changer une seule règle du modèle. Elle compte dix fenêtres (F1 à F10), accepte une description faite de texte et d'images, et l'affiche. Les 247 tests passent sous Windows, interface comprise.
+Le gestionnaire de tickets des labos 2 et 3 devient un système distribué. Le modèle tourne sur un serveur et s'expose par une API REST ; l'interface PySide6 du labo 3 l'utilise à distance sans qu'une seule fenêtre change ; une page web (bonus) utilise la même API. Le serveur est déployé sur Render. Les 316 tests passent.
+
+- Page web : https://gestion-tickets-zmfy.onrender.com
+- Documentation interactive de l'API : https://gestion-tickets-zmfy.onrender.com/docs
+- Définition OpenAPI : [`docs/openapi.yaml`](docs/openapi.yaml)
+
+Le service gratuit de Render s'endort après 15 minutes sans requête et met environ une minute à repartir. Au réveil, les données reviennent à l'état de démonstration.
 
 ## Sommaire
 
 1. [Installation et utilisation](#1-installation-et-utilisation)
-2. [Ce que l'interface couvre](#2-ce-que-linterface-couvre)
-3. [Architecture et modificabilité](#3-architecture-et-modificabilité)
-4. [Connexion avec mot de passe](#4-connexion-avec-mot-de-passe)
-5. [Accessibilité : WCAG 2.2 niveau AA](#5-accessibilité--wcag-22-niveau-aa)
-6. [Captures d'écran de toutes les fenêtres](#6-captures-décran-de-toutes-les-fenêtres)
-7. [Vérification](#7-vérification)
-8. [Ce que nous avons appris](#8-ce-que-nous-avons-appris)
+2. [Conception de l'API](#2-conception-de-lapi)
+3. [Architecture MVC distribuée](#3-architecture-mvc-distribuée)
+4. [Ce que l'intégration a changé](#4-ce-que-lintégration-a-changé)
+5. [Déploiement sur Render](#5-déploiement-sur-render)
+6. [Interface web (bonus)](#6-interface-web-bonus)
+7. [Sécurité](#7-sécurité)
+8. [Vérification](#8-vérification)
 
 ---
 
 ## 1. Installation et utilisation
 
-Depuis ce dossier, avec Python 3.10 ou plus :
+Depuis ce dossier, avec Python 3.10 ou plus (3.13 conseillé) :
 
 ```
-pip install -r requirements.txt
-python main.py
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements-dev.txt
 ```
 
-`requirements.txt` installe PySide6-Essentials (Qt 6.10 ou plus) pour l'interface, et fpdf2 pour l'export PDF de la console. La console du labo 2 reste disponible : `python console.py`.
+| Commande | Ce qu'elle lance |
+|---|---|
+| `python main.py` | L'interface PySide6 autonome, comme au labo 3 (le modèle tourne dans le même processus) |
+| `python main.py --serveur` | L'interface PySide6, cliente de l'API déployée sur Render |
+| `python main.py --serveur http://127.0.0.1:8000` | L'interface PySide6, cliente d'un serveur local |
+| `uvicorn serveur.app:creer_api_demo --factory --reload` | Le serveur sur http://127.0.0.1:8000 (page web, `/docs`, API) |
+| `python outils/verifier_deploiement.py [URL]` | Un parcours complet avec le vrai client, chronométré, sans rien modifier |
+| `python console.py` | La console du labo 2 (locale) |
 
-**Comptes de démonstration.** Au démarrage, cinq comptes et deux tickets existent déjà. On se connecte avec le courriel et le mot de passe. Le bouton « Afficher les comptes de démonstration » de la fenêtre de connexion remplit les deux champs.
+Trois fichiers de dépendances : `requirements.txt` pour le client (PySide6, httpx), `requirements-serveur.txt` pour le serveur (FastAPI, uvicorn, PyJWT ; c'est celui que Render installe), `requirements-dev.txt` pour tout, plus PyYAML pour l'export OpenAPI.
+
+**Comptes de démonstration.** Cinq comptes et deux tickets existent au démarrage du serveur. Ces mots de passe sont publics et ne servent qu'à la démonstration.
 
 | Courriel | Mot de passe | Rôles |
 |---|---|---|
@@ -39,276 +55,174 @@ python main.py
 | diane@uqac.ca | diane-2026 | Développeuse |
 | damien@uqac.ca | damien-2026 | Développeur |
 
-Ces mots de passe sont publics et ne servent qu'à la démonstration.
+**Essayer l'API à la main.** Sur `/docs`, envoyer `POST /api/v1/sessions` avec un compte, copier le jeton reçu dans le bouton **Authorize**, puis essayer n'importe quelle route.
 
-**Joindre un fichier.** Pour joindre une image, on la choisit n'importe où sur le disque. L'application la copie dans `donnees/televersements` sous un nom unique, puis la fabrique du labo 2 la vérifie (extension, signature, taille). Le texte tapé est enregistré de la même façon dans un fichier `.txt`.
+## 2. Conception de l'API
 
-**Vérifier.**
+Nous avons suivi les quatre étapes du cours (S6) : spécifier les ressources, leurs opérations, leurs URI, puis les arguments et la façon de les transmettre.
 
-```
-python -m unittest discover -s tests
-python outils/captures.py
-python outils/mutation.py
-```
+### Ressources
 
-La première commande lance les 247 tests ; ceux de l'interface demandent PySide6 et sont ignorés sans lui. La deuxième refait les 25 captures de `docs/captures`. La troisième lance les tests de mutation du code ajouté au labo 3 (quelques minutes).
-
-## 2. Ce que l'interface couvre
-
-Chaque exigence de l'énoncé a sa fenêtre, et chaque action du labo 2 a un bouton ou un menu. Une description mélange librement des blocs de texte et des images, dans l'ordre où on les ajoute. La vidéo et l'export PDF sont hors du cadre : une vidéo jointe par la console s'affiche comme une ligne « non prise en charge », et l'export PDF reste dans la console.
-
-| N° | Fenêtre | Pour qui | Ce qu'elle couvre |
-|---|---|---|---|
-| F1 | Connexion | tous | courriel et mot de passe, comptes de démonstration |
-| F2 | Créer un compte | nouveau compte | inscription avec le rôle Rapporteur |
-| F3 | Fenêtre principale | tous | liste, filtres (mes tickets, assignés à moi, tous), statut, priorité, archives |
-| F4 | Détail d'un ticket | qui voit le ticket | texte, images, commentaires, toutes les actions du cycle de vie |
-| F5 | Nouveau ticket | CREATE | titre, priorité, texte et images dès la création |
-| F6 | Ajouter à la description | auteur | un onglet Texte, un onglet Image |
-| F7 | Dialogues d'action | selon l'action | motif (rejet, fermeture, réouverture), assignation, titre, priorité, confirmation d'archivage |
-| F8 | Gestion des comptes | MANAGE_USERS | attribuer ou retirer un rôle, désactiver, réactiver |
-| F9 | Mon profil | tous | rôles et permissions du compte |
-| F10 | Aide et accessibilité (F1) | tous | raccourcis, légende des pastilles, comptes de démonstration |
-
-Les menus ne montrent que les actions permises par les rôles du compte. Dans F4, un bouton est grisé quand l'action est impossible dans l'état du ticket, et la ligne « Possible maintenant » les énumère. Le modèle revérifie toujours : le bandeau en haut affiche `OK`, ou `REFUSÉ` avec le motif donné par le modèle.
-
-## 3. Architecture et modificabilité
-
-Nous avons ajouté une couche entre l'interface et le modèle, pour qu'on puisse changer l'une sans toucher l'autre. L'interface n'importe que la couche application, qui seule appelle le modèle du labo 2. `main.py` assemble les trois couches et injecte les services dans les fenêtres. La console du labo 2 reste un second client du même modèle : les règles ne sont écrites qu'une fois, pour les deux.
-
-```mermaid
-flowchart TB
-    MAIN["main.py<br/>assemble les couches"]
-    UI["interface (PySide6)<br/>fenêtres F1 à F10, theme.py, widgets"]
-    APP["application (sans Qt)<br/>Session, ServiceComptes, ServiceTickets,<br/>ImportFichiers, Resultat"]
-    CON["console.py<br/>client du labo 2"]
-    M["gestion_tickets<br/>modèle du labo 2 : acteurs, ticket, consultation"]
-    MAIN -.-> UI
-    MAIN -.-> APP
-    UI --> APP
-    APP --> M
-    CON --> M
-```
-
-Les flèches pleines sont les dépendances entre couches ; un test vérifie qu'aucun import ne remonte les couches et que Qt n'apparaît que dans `interface`.
-
-| Décision | Ce qu'elle rend facile à changer |
-|---|---|
-| PySide6 plutôt que tkinter | L'accessibilité (section 5). Qt lit aussi le JPG sans Pillow. |
-| Couche application sans Qt : `Session`, `ServiceComptes`, `ServiceTickets`, `Resultat` | On peut changer de bibliothèque graphique sans toucher au modèle, et tester chaque action sans écran. |
-| `allowed_actions` dans le modèle, calculé par les mêmes essais que les actions | Une règle d'état ou de rôle ajoutée au modèle met à jour les boutons, sans modifier l'interface. |
-| `DescriptionVisitor` produit des blocs immuables (texte, image, commentaire) | Un nouveau type de contenu demande une méthode de visite et un bloc. L'interface ne reçoit jamais un objet du modèle. |
-| `ImportFichiers` copie le fichier choisi sous un nom unique, puis appelle la Fabrique du labo 2 | La vérification (extension, signature, taille) reste à un seul endroit. |
-| `theme.py` définit les onze jetons de couleur et la feuille de style | Changer la palette touche un seul fichier ; le contraste élevé consiste à ne pas l'appliquer. |
-
-### Diagramme de classes v4
-
-Le diagramme v4 (`docs/diagramme_v4.puml`) compte maintenant cinq paquetages, dont « Application » et « Interface », pour 62 classes.
-
-![Diagramme de classes v4](docs/diagramme_v4.png)
-
-### Organisation du code
-
-| Paquet | Rôle |
-|---|---|
-| `gestion_tickets` | Le modèle du labo 2, plus l'authentification, `allowed_actions` et `DescriptionVisitor` |
-| `application` | Services sans Qt : `Session`, `ServiceComptes`, `ServiceTickets`, `ImportFichiers`, `Resultat` |
-| `interface` | Fenêtres PySide6, `theme.py` (seul endroit où une couleur est écrite), `libelles.py`, widgets communs |
-| `main.py` | Assemble les trois couches |
-| `console.py` | La console du labo 2, branchée sur le même modèle |
-| `donnees_demo.py` | Comptes, tickets et fichiers de départ |
-| `outils` | `captures.py` (captures d'écran) et `mutation.py` (tests de mutation) |
-| `docs` | Diagramme de classes v4 (`.puml` et `.png`) et captures d'écran |
-| `tests` | 247 tests : modèle, application, console, interface, conformité au diagramme, architecture |
-
-## 4. Connexion avec mot de passe
-
-Nous avons retenu une vraie connexion par courriel et mot de passe (option B), plutôt que le choix d'un compte dans une liste comme dans la console du labo 2 (option A). Une interface graphique se prête à un vrai formulaire de connexion, et le rapport du labo 2 notait déjà qu'il faudrait une vraie authentification. Le reste du système n'a pas changé : la connexion donne le même objet `User` que l'option A, et toutes les règles du labo 2 s'appliquent ensuite.
-
-| Choix | Pourquoi |
-|---|---|
-| Empreinte PBKDF2-HMAC-SHA256, sel aléatoire de 16 octets, 600 000 itérations | Recommandation OWASP 2023. Le mot de passe n'est jamais gardé en clair. |
-| Nombre d'itérations gardé avec chaque empreinte | On peut augmenter le coût plus tard sans invalider les comptes existants. |
-| Comparaison avec `hmac.compare_digest` | La durée de la comparaison ne révèle pas où l'empreinte diffère. |
-| Courriel inconnu : une empreinte est quand même calculée | Un échec prend le même temps, que le compte existe ou non. |
-| Motif d'échec unique : « courriel ou mot de passe incorrect » | On ne peut pas découvrir quels courriels ont un compte. |
-| Mot de passe de 8 à 128 caractères, normalisé en Unicode NFKC | Longueurs de NIST SP 800-63B. Un « é » tapé de deux façons donne la même empreinte. |
-| Empreintes marquées `{secret}` dans le diagramme, sans accesseur | Aucun code ne peut les lire, et un test le vérifie. |
-
-Les cinq comptes de démonstration ont des mots de passe publics (`alice-2026`, etc.), listés dans F1 et F10. Ils ne servent qu'à la démonstration.
-
-## 5. Accessibilité : WCAG 2.2 niveau AA
-
-L'interface vise WCAG 2.2 niveau AA, appliqué à une application de bureau selon WCAG2ICT. C'est ce critère qui a fait choisir PySide6 : tkinter ne transmet pas le nom de ses contrôles aux lecteurs d'écran, et échoue donc au critère 4.1.2.
-
-| Critère | Ce que fait l'interface | Vérifié par |
+| Ressource | Attributs exposés | Échanges |
 |---|---|---|
-| 2.1.1 Clavier | Tout se fait au clavier : Tab, flèches, Entrée, Échap, Alt + lettre soulignée, Ctrl + N, F5, F1. | test de l'ordre de tabulation de F1 |
-| 4.1.2 Nom, rôle et valeur | Chaque contrôle a un nom lu par NVDA et le Narrateur ; chaque image a un texte de remplacement. | test sur chaque contrôle focalisable ; UI Automation sous Windows : 31 contrôles de F1 et F3, aucun sans nom |
-| 4.1.3 Messages d'état | Le résultat de chaque action est annoncé au lecteur d'écran sans déplacer le focus. | revue du code (`QAccessibleAnnouncementEvent`) |
-| 1.4.3 et 1.4.11 Contraste | 4,5:1 au moins pour le texte, 3:1 pour les bordures ; le focus est un contour bleu de 2 px (`#0f62fe`). | test du contraste des onze jetons de `theme.py` |
-| 1.4.1 Utilisation de la couleur | Le statut et la priorité ne sont jamais signalés par la seule couleur : chaque pastille a un libellé et une icône. | captures F3 et F10 |
-| 1.4.4 Redimensionnement du texte | Le texte se règle de 100 % à 200 % (menu Affichage, Ctrl + +, Ctrl + -). | test à 200 % ; captures W1 et W2 |
-| 2.5.8 Taille des cibles | Les boutons font 32 px de haut, pour un minimum exigé de 24 px. | test des cibles d'au moins 24 px |
-| Contraste élevé de Windows | L'application n'applique pas sa feuille de style et reprend les couleurs du système. | test du mode contraste élevé (simulé) |
+| Session | jeton, expiration, profil | ouvrir (se connecter) |
+| Profil | numéro, nom, rôles, permissions | consulter |
+| Compte | numéro, nom, rôles, actif | inscrire, lister, activer ou désactiver |
+| Rôle d'un compte | nom | attribuer, retirer |
+| Ticket | numéro, titre, statut, priorité, auteur, assigné, dates, actions permises | créer, lister, consulter, modifier le titre et la priorité |
+| Contenu de la description | texte, ou image (nom, dimensions, URL), ou vidéo (nom) | lister, ajouter un texte, joindre une image |
+| Image | octets de l'image | télécharger |
+| Commentaire | numéro, auteur, date, texte | lister, publier |
+| Transition | action, motif, assigné, statut obtenu | demander |
+| Archive | ticket archivé | lister, archiver |
 
-L'application a aussi été lancée sur un écran Windows réglé à 125 % : les fenêtres s'adaptent sans texte coupé. Restent à faire à la main : une écoute avec NVDA ou le Narrateur, un passage d'Accessibility Insights (FastPass), une mesure des contrastes à l'écran avec Colour Contrast Analyser, et un essai en vrai mode contraste élevé.
+### Chemins et opérations (préfixe `/api/v1`)
 
-## 6. Captures d'écran de toutes les fenêtres
+| Méthode | Chemin | Arguments | Succès |
+|---|---|---|---|
+| POST | `/sessions` | body : courriel, mot_de_passe | 201 |
+| GET | `/moi` | jeton | 200 |
+| POST | `/comptes` | body : nom, courriel, mot_de_passe, confirmation | 201 |
+| GET | `/comptes` | query : `assignables=true` (facultatif) | 200 |
+| PATCH | `/comptes/{numero}` | url : numéro ; body : actif | 200 |
+| POST | `/comptes/{numero}/roles` | url : numéro ; body : role | 201 |
+| DELETE | `/comptes/{numero}/roles/{role}` | url : numéro, rôle | 204 |
+| GET | `/tickets` | query : filtre, statut, priorite | 200 |
+| POST | `/tickets` | body : titre, priorite, texte | 201 + `Location` |
+| GET | `/tickets/{numero}` | url : numéro | 200 |
+| PATCH | `/tickets/{numero}` | url : numéro ; body : titre et/ou priorite | 200 |
+| GET | `/tickets/{numero}/contenus` | url : numéro | 200 |
+| POST | `/tickets/{numero}/textes` | url : numéro ; body : texte | 201 |
+| POST | `/tickets/{numero}/images` | url : numéro ; body multipart : fichier | 201 + `Location` |
+| GET | `/tickets/{numero}/images/{nom}` | url : numéro, nom | 200, image |
+| GET | `/tickets/{numero}/commentaires` | url : numéro | 200 |
+| POST | `/tickets/{numero}/commentaires` | url : numéro ; body : texte | 201 |
+| POST | `/tickets/{numero}/transitions` | url : numéro ; body : action, motif, assigne | 201 |
+| GET | `/archives` | jeton | 200 |
+| POST | `/archives` | body : numero | 201 + `Location` |
+| GET | `/sante` | aucun | 200 |
 
-Les 25 captures montrent les dix fenêtres prévues, toutes implémentées, dans un état représentatif. Elles ont été prises sous Windows 11 par `python outils/captures.py`, avec les données de démonstration ; chaque refus affiché est un vrai refus du modèle.
+Les règles du cours appliquées :
 
-### F1 et F2 : connexion et création de compte
+- chaque ressource a un URI qui donne toutes ses instances (`/comptes`, `/tickets`, `/archives`) ;
+- une ressource composante est un sous-chemin de la ressource composée : contenus, images, commentaires et transitions sous `/tickets/{numero}` (principe Créateur de GRASP) ;
+- in url pour désigner une instance, in query pour un algorithme (les filtres de la liste), in body pour POST, PUT et PATCH ;
+- une seule façon de faire chaque chose : les archives se lisent par `/archives`, pas par un filtre de `/tickets`.
 
-![F1 Connexion](docs/captures/F1a_connexion.png)
+Les transitions du cycle de vie forment une ressource à part. Une transition n'est ni une lecture ni la modification libre d'un attribut : c'est une demande que le modèle (patron State) accepte ou refuse selon l'état du ticket et les rôles du compte.
 
-*Figure 1. F1 Connexion.*
+### Codes de réponse
 
-![F1 après un mauvais mot de passe](docs/captures/F1b_connexion_refusee.png)
+Une erreur a toujours la même forme : `{"motif": "...", "details": [...], "cause": "..."}`. Le motif est celui que le modèle écrit, comme dans le bandeau REFUSÉ du labo 3.
 
-*Figure 2. F1 après un mauvais mot de passe : le motif reste générique.*
+| Code | Cause | Quand |
+|---|---|---|
+| 401 | NON_CONNECTE | jeton absent, invalide ou expiré ; compte désactivé ; mauvais mot de passe |
+| 403 | INTERDIT | les rôles du compte n'accordent pas la permission |
+| 404 | INTROUVABLE | ressource inexistante, ou invisible pour ce compte (son existence n'est pas révélée) |
+| 409 | CONFLIT | la permission est accordée, mais ce ticket ne le permet pas maintenant (état, auteur, assigné) |
+| 422 | INVALIDE | corps mal formé, ou argument refusé par le modèle (titre vide, fichier refusé) |
 
-![F1 avec les comptes de démonstration](docs/captures/F1c_comptes_de_demonstration.png)
+## 3. Architecture MVC distribuée
 
-*Figure 3. F1 avec les comptes de démonstration ; un clic remplit les deux champs.*
+![Vue d'ensemble de l'architecture](docs/architecture_lab4.png)
 
-![F2 Créer un compte](docs/captures/F2_creer_un_compte_erreur.png)
+| Rôle MVC | Paquet | Contenu |
+|---|---|---|
+| Modèle (couche métier) | `gestion_tickets`, `application` | Le modèle du labo 2, inchangé, et les services du labo 3 ; ils ne tournent que sur le serveur |
+| Contrôleur | `serveur` | FastAPI : 16 chemins, jetons, verrou, traduction d'un refus en code HTTP ; aucune règle métier |
+| Vue | `interface`, `client`, `web` | Les fenêtres PySide6, les services distants qu'elles utilisent, la page web |
+| Contrat | `contrat` | Ce que client et serveur échangent : énumérations, vues, blocs, `Resultat` et sa cause, interfaces `GestionComptes` et `GestionTickets` |
 
-*Figure 4. F2 Créer un compte : l'erreur s'affiche sous le champ concerné.*
+Les fenêtres dépendent des interfaces `GestionComptes` et `GestionTickets` du contrat, pas d'une implémentation. Deux implémentations existent : `ServiceComptes` et `ServiceTickets` (le modèle dans le processus) et `ClientComptes` et `ClientTickets` (le modèle derrière l'API, patron Proxy). `main.py` choisit laquelle injecter.
 
-### F3 : fenêtre principale
+| Décision | Pourquoi |
+|---|---|
+| Contrat partagé, sans dépendance | Le client ne contient pas le modèle et ne peut pas le contourner. Le serveur traduit le modèle vers le contrat (`application/traduction.py`), le client reconstruit le contrat depuis le JSON. |
+| Une cause dans chaque refus | Le serveur choisit le code HTTP par une seule table, sans recopier aucune règle. La cause vient de ce que le modèle dit lui-même (`can_globally`, `allowed_actions`). |
+| FastAPI | La définition OpenAPI et la page `/docs` sont générées depuis le code et ne peuvent pas en diverger. |
+| Jeton signé (JWT HS256), 8 h | REST est sans état : chaque requête porte l'identité du compte. Se déconnecter consiste à oublier le jeton. |
+| Un verrou autour du modèle | FastAPI traite les requêtes dans plusieurs fils ; le modèle n'est pas prévu pour cela, et les motifs de refus passent par un journal partagé. |
+| Données en mémoire | Le disque de Render gratuit est éphémère ; le système repart des données de démonstration. |
 
-![F3 vue par un rapporteur](docs/captures/F3a_principale_rapporteur.png)
+Le diagramme de classes v5 ([`docs/diagramme_v5.puml`](docs/diagramme_v5.puml), [image](docs/diagramme_v5.png)) compte 77 classes en neuf paquetages. Un test vérifie que le code le suit exactement, paquetages Contrat, Serveur et Client compris.
 
-*Figure 5. F3 vue par un rapporteur (Remi) : il ne voit que son ticket, pas celui de Rita.*
+## 4. Ce que l'intégration a changé
 
-![F3 vue par une développeuse](docs/captures/F3b_principale_developpeuse_tous.png)
+| Partie | Modification |
+|---|---|
+| Modèle (`gestion_tickets`) | Aucune. |
+| Application | Les services rendent des types du contrat et fixent la cause de chaque refus ; `commenter` rend le commentaire publié ; `ServiceComptes` et `ServiceTickets` implémentent les interfaces du contrat. |
+| Interface PySide6 | Dix lignes d'import (de `application` vers `contrat`) ; une fenêtre d'attente pendant le réveil du serveur. Aucune fenêtre modifiée. |
+| `main.py` | `--serveur [URL]` injecte les clients distants au lieu des services locaux. |
+| Nouveau : `serveur` | API REST, jetons, verrou, schémas JSON, page web. |
+| Nouveau : `client` | Services distants : délai de 10 s, réveil de 90 s, pannes du réseau dans le bandeau, cache local des images. |
+| Nouveau : `web` | Page web (bonus). |
 
-*Figure 6. F3 vue par une développeuse (Diane), filtre « Tous les tickets ».*
+## 5. Déploiement sur Render
 
-![F3 onglet Archives](docs/captures/F3c_principale_archives.png)
+| Réglage | Valeur |
+|---|---|
+| Dépôt, branche | `Mrpropre12/lab-architecture-de-logiciel`, `lab4` (dépôt public) |
+| Root Directory | `Laboratoire_4/code` |
+| Build Command | `pip install -r requirements-serveur.txt` |
+| Start Command | `python -m uvicorn serveur.app:creer_api_demo --factory --host 0.0.0.0 --port $PORT` |
+| Variables | `PYTHON_VERSION=3.13.5`, `TICKETS_SECRET` (au moins 32 caractères) |
+| Health Check Path | `/api/v1/sante` |
 
-*Figure 7. F3, onglet Archives (Alice, administratrice).*
+Le dépôt étant public, Render ne redéploie pas à chaque push : « Manual Deploy » après chaque changement. Durées mesurées par `outils/verifier_deploiement.py` :
 
-### F4 : détail d'un ticket
+| Où | Connexion | Autres requêtes |
+|---|---|---|
+| Serveur local (uvicorn) | 0,14 s | 3 ms |
+| Render, offre gratuite | 1,3 s | 125 à 350 ms |
 
-![F4 vue par l'assigné](docs/captures/F4a_detail_assigne.png)
+La connexion est lente sur Render parce que le hachage des mots de passe (PBKDF2, 600 000 itérations, recommandation OWASP) tourne sur un processeur partagé. Nous l'avons gardé : 1,3 s une fois par session reste acceptable. Les autres durées viennent surtout de l'aller-retour réseau.
 
-*Figure 8. F4 vue par l'assigné (Damien) : la ligne « Possible maintenant » énumère les actions.*
+## 6. Interface web (bonus)
 
-![F4 validation refusée](docs/captures/F4b_detail_validation_refus.png)
+La page est servie par le même serveur, à la racine, et utilise la même API que le client PySide6. Elle ne propose que les actions que le modèle permet maintenant, et affiche OK, ou REFUSÉ avec le motif du modèle.
 
-*Figure 9. F4 : l'assigné ne peut pas valider son propre travail, et le modèle le dit.*
+![Connexion](docs/captures/web1_connexion.png)
 
-![F4 texte et image](docs/captures/F4c_detail_texte_et_image.png)
+*Figure 1. Connexion : un mauvais mot de passe donne le motif générique du modèle.*
 
-*Figure 10. F4 : une description faite d'un texte et d'une image.*
+![Détail vu par un rapporteur](docs/captures/web2_detail_rapporteur.png)
 
-![F4 ticket archivé](docs/captures/F4d_detail_archive_lecture_seule.png)
+*Figure 2. Remi (rapporteur) : son seul ticket, l'image téléchargée avec le jeton, un commentaire contenant `<script>` affiché comme du texte.*
 
-*Figure 11. F4 d'un ticket archivé : consultation seulement.*
+![Détail vu par une développeuse](docs/captures/web3_detail_developpeuse.png)
 
-### F5 et F6 : créer un ticket et compléter sa description
+*Figure 3. Diane (développeuse) après la validation : le ticket est TERMINÉ.*
 
-![F5 Nouveau ticket](docs/captures/F5_nouveau_ticket.png)
+![Sur un téléphone](docs/captures/web4_telephone.png)
 
-*Figure 12. F5 Nouveau ticket, avec texte et image dès la création.*
+*Figure 4. Sur un téléphone (390 px) : aucune barre de défilement horizontale pour la page.*
 
-![F6 onglet Texte](docs/captures/F6a_ajout_texte.png)
+## 7. Sécurité
 
-*Figure 13. F6 Ajouter à la description, onglet Texte.*
+| Mesure | Effet |
+|---|---|
+| Jeton JWT HS256, secret d'au moins 32 octets, durée 8 h | Une requête sans jeton valide reçoit 401 ; un jeton d'un autre serveur ou expiré est refusé. |
+| Compte vérifié à chaque requête | Un compte désactivé perd l'accès immédiatement, même avec un jeton encore valide. |
+| 404 pour un ticket invisible | On ne peut pas découvrir qu'un ticket existe. |
+| Images servies seulement par leur nom dans le modèle, et seulement si le ticket est visible | Aucun chemin n'est construit depuis l'URL ; pas d'accès aux images d'un ticket qu'on ne voit pas. |
+| Taille d'une image limitée à 10 Mo avant lecture | Comme la fabrique du labo 2. |
+| Page web : `textContent` seulement, politique CSP stricte | Une donnée reçue ne peut pas devenir du HTML ni du script ; un test le vérifie. |
+| Mots de passe hachés (PBKDF2), HTTPS sur Render | Inchangé depuis le labo 3 ; en local, le serveur n'est pas chiffré : comptes de démonstration seulement. |
 
-![F6 onglet Image](docs/captures/F6b_ajout_image.png)
-
-*Figure 14. F6 Ajouter à la description, onglet Image.*
-
-### F7 : dialogues d'action
-
-![F7 Motif d'un rejet](docs/captures/F7a_motif_rejet.png)
-
-*Figure 15. F7 Motif d'un rejet (même dialogue pour fermer et rouvrir).*
-
-![F7 Assigner](docs/captures/F7b_assigner.png)
-
-*Figure 16. F7 Assigner.*
-
-![F7 Modifier le titre](docs/captures/F7c_modifier_titre.png)
-
-*Figure 17. F7 Modifier le titre.*
-
-![F7 Changer la priorité](docs/captures/F7d_priorite.png)
-
-*Figure 18. F7 Changer la priorité.*
-
-![F7 Confirmation avant l'archivage](docs/captures/F7e_confirmation_archivage.png)
-
-*Figure 19. F7 Confirmation avant l'archivage.*
-
-### F8 à F10 : comptes, profil, aide
-
-![F8 Gestion des comptes](docs/captures/F8a_gestion_des_comptes.png)
-
-*Figure 20. F8 Gestion des comptes (MANAGE_USERS).*
-
-![F8 Attribuer un rôle](docs/captures/F8b_attribuer_un_role.png)
-
-*Figure 21. F8 Attribuer un rôle.*
-
-![F9 Mon profil](docs/captures/F9_profil.png)
-
-*Figure 22. F9 Mon profil.*
-
-![F10 Aide et accessibilité](docs/captures/F10_aide_et_accessibilite.png)
-
-*Figure 23. F10 Aide et accessibilité (touche F1) ; la fenêtre défile.*
-
-### Texte à 200 %
-
-![F3 avec le texte à 200 %](docs/captures/W1_principale_texte_200.png)
-
-*Figure 24. F3 avec le texte à 200 %.*
-
-![F4 avec le texte à 200 %](docs/captures/W2_detail_texte_200.png)
-
-*Figure 25. F4 avec le texte à 200 %.*
-
-## 7. Vérification
-
-Les 247 tests passent sous Windows 11 avec Python 3.13 et PySide6 6.12 ; un seul est sauté, car Windows refuse de créer un lien symbolique sans droit d'administrateur. Ils couvrent le modèle, la couche application, la console et l'interface.
+## 8. Vérification
 
 | Vérification | Ce qu'elle garantit | Résultat |
 |---|---|---|
-| Tests unitaires (13 fichiers) | Chaque règle du labo 2 et chaque service du labo 3 | 247 tests, 246 réussis, 1 sauté |
-| `test_actions_permises` | Les boutons actifs sont exactement les actions que le modèle accepte | 546 cas (6 états × 7 acteurs × 13 actions), tous concordants |
-| `test_conformite` | Le code suit le diagramme v4 : classes, héritages, opérations, visibilité, aucune méthode non déclarée | 62 classes sur 62, paquetage « Interface » compris |
-| `test_architecture` | Aucun import ne remonte les couches ; Qt n'apparaît que dans `interface` | aucun écart |
-| `test_interface` (21 tests, sans écran) | Noms accessibles, cibles, ordre de tabulation, texte à 200 %, contraste élevé, contrastes | tous réussis |
-| Application lancée sous Windows | Démarrage, connexion, arbre UI Automation lu par les lecteurs d'écran | 31 contrôles focalisables dans F1 et F3, tous nommés |
-| pyflakes | Aucun import ni variable inutile | 2 avertissements, deux imports voulus marqués `noqa` |
+| 247 tests du labo 3 | Le modèle, les services et l'interface n'ont pas régressé | tous réussis |
+| `test_api` (31 tests) | Chaque chemin, chaque code de réponse, la forme des erreurs, la page web | tous réussis |
+| `test_client` (34 tests) | Les tests de la couche application rejoués à travers l'API : mêmes résultats et mêmes motifs qu'en local ; pannes du réseau | tous réussis |
+| `test_reveil` (4 tests) | Réveil du serveur sans figer l'écran, point d'entrée | tous réussis |
+| Test du verrou | 40 requêtes en parallèle gardent chacune leur motif ; retiré, le verrou fait échouer le test | réussi (échoue sans verrou) |
+| `test_conformite` | Le code suit le diagramme v5 | 77 classes sur 77 |
+| `test_architecture` | Le contrat ne dépend de rien ; la vue ne voit jamais le modèle ; Qt, FastAPI et httpx restent dans leur paquet | aucun écart |
+| Essai dans Chromium | Parcours complet de la page web par quatre comptes, téléphone compris | aucune erreur |
+| `outils/verifier_deploiement.py` sur Render | Le service déployé se comporte comme en local | 12 vérifications sur 12 |
 
-Le test sous Windows a trouvé un vrai défaut, invisible dans la machine virtuelle Linux : `PathGuard.confine` acceptait un nom de fichier contenant une demi-paire de substitution Unicode (`\ud800`), que Windows accepte et que Linux refuse. Il le refuse maintenant sur les deux systèmes.
-
-### Tests de mutation
-
-`outils/mutation.py` introduit 533 erreurs, une à la fois, dans le code ajouté au labo 3 : couche application, authentification, `allowed_actions` et `DescriptionVisitor`. Les tests en détectent 524 (98,3 %). Les 9 autres sont des mutations équivalentes, qui ne changent aucun comportement observable : toutes les erreurs qui changent le comportement sont détectées.
-
-Chaque mutant change une seule expression : `==` devient `!=`, `<` devient `>=`, `and` devient `or`, `True` devient `False`, un entier augmente de 1, un `not` disparaît ou s'ajoute, un `return` renvoie `None`. Les tests tournent sur une copie du code, jamais sur l'original.
-
-| Survivants | Pourquoi ils sont équivalents |
-|---|---|
-| 7 × `return False` devient `return None` dans les essais privés `__try_*` de `ticket.py` | Les appelants ne testent que la vérité du résultat, et les actions publiques renvoient leur propre `False`. |
-| La valeur par défaut `apply=True` de `Ticket.__authorize` devient `False` | Chaque appel passe `apply` explicitement : la valeur par défaut ne sert jamais. |
-| 99 devient 100 dans la clé de tri des rôles (`services.py`) | Les deux valeurs classent un rôle inconnu après les trois rôles connus. |
-
-Le premier passage complet avait laissé 52 mutants vivants. La plupart montraient qu'un refus pouvait renvoyer `None` au lieu de `False`, ou perdre son motif, sans qu'aucun test le voie ; or l'interface affiche ce motif. Neuf tests ont été ajoutés, dont un qui vérifie le résultat et le motif de chacun des refus des 546 cas.
-
-Un premier score de 98,7 % était faux. Avec onze copies en parallèle, la console dépassait son délai de 60 s, et ces échecs comptaient des mutants comme détectés. L'outil limite maintenant les tests de la console à deux copies à la fois.
-
-## 8. Ce que nous avons appris
-
-1. **Une couche sans Qt rend l'interface remplaçable.** La couche application fait de l'interface un simple client du modèle. La console et PySide6 tournent sur le même modèle, et les 34 tests de l'application n'ont besoin d'aucun écran.
-2. **Demander au modèle ce qui est permis, plutôt que le recopier.** `allowed_actions` passe par les mêmes essais que les actions elles-mêmes. Les boutons et le modèle ne peuvent donc pas se contredire : 546 cas testés, tous concordants.
-3. **Le Visiteur a servi une deuxième fois.** `DescriptionVisitor` a ajouté l'affichage graphique sans toucher `Ticket` ni les contenus, comme l'export PDF au labo 2. C'est la modificabilité promise par le patron.
-4. **L'accessibilité se joue au choix de la bibliothèque.** Avec tkinter, le critère 4.1.2 aurait été hors d'atteinte quoi qu'on fasse ensuite. Avec PySide6, les tests automatiques ont trouvé deux défauts réels, des onglets et des zones de défilement sans nom, corrigés aussitôt.
-5. **Tester sur la vraie plateforme.** Dans la machine virtuelle Linux, tout était vert. Sous Windows, un test de confinement des chemins échouait : Windows accepte un nom de fichier que Linux refuse. Nous refusons maintenant ces noms partout.
-6. **Un seul endroit par décision.** `theme.py` est le seul fichier où une couleur est écrite, et `libelles.py` le seul où un rôle prend son accent. Changer la palette ou un libellé touche un seul fichier.
+Le README du labo 3 (fenêtres, accessibilité, tests de mutation) est conservé dans [`docs/README_labo3.md`](docs/README_labo3.md).

@@ -28,22 +28,31 @@ class Transport:
                                 headers={"User-Agent": "gestionnaire-tickets-6gei311"})
         self.__http = http
         self.__jeton: Optional[str] = None
-        self.profil: Optional[Profil] = None  # dernier profil recu (None : aucun compte connecte)
+        self.__profil: Optional[Profil] = None
 
     @property
     def url(self) -> str:
         return str(self.__http.base_url)
 
     @property
+    def profil(self) -> Optional[Profil]:
+        """Dernier profil recu (None : aucun compte connecte)."""
+        return self.__profil
+
+    @property
     def connecte(self) -> bool:
         return self.__jeton is not None
 
     def ouvrir(self, jeton: str, profil: Profil) -> None:
-        self.__jeton, self.profil = jeton, profil
+        self.__jeton, self.__profil = jeton, profil
 
     def fermer(self) -> None:
         """Se deconnecter : oublier le jeton (il expire seul cote serveur)."""
-        self.__jeton, self.profil = None, None
+        self.__jeton, self.__profil = None, None
+
+    def retenir(self, profil: Profil) -> None:
+        """Profil plus recent (GET /moi) : les roles ont pu changer."""
+        self.__profil = profil
 
     def fin(self) -> None:
         self.__http.close()

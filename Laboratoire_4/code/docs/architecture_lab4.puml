@@ -1,0 +1,50 @@
+@startuml architecture_lab4
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam packageStyle rectangle
+skinparam ArrowColor #242424
+title Laboratoire 4 : MVC distribue (client-serveur, API REST)
+
+package "Poste de l'utilisateur (Windows)" {
+  [interface\nPySide6, fenetres F1 a F10] as UI
+  [client\nClientComptes, ClientTickets\nTransport, CacheImages (httpx)] as CLIENT
+}
+
+package "Navigateur" {
+  [web\nindex.html, app.js, style.css] as WEB
+}
+
+package "Partage par les deux cotes" {
+  [contrat\nenumerations, vues, blocs, Resultat + Cause\nGestionComptes, GestionTickets (interfaces)] as CONTRAT
+}
+
+package "Serveur Render (Python 3.13, uvicorn)" {
+  [serveur (controleur)\nFastAPI : 16 chemins /api/v1, schemas, JWT\nNoyau (verrou), cause -> code HTTP] as SERVEUR
+  [application\nServiceComptes, ServiceTickets\ntraduction modele -> contrat] as APP
+  [gestion_tickets (modele, labo 2)\nacteurs, ticket (State), consultation (Visiteur)] as MODELE
+}
+
+UI ..> CONTRAT : depend de GestionComptes /\nGestionTickets
+CLIENT ..|> CONTRAT : implemente
+APP ..|> CONTRAT : implemente
+CLIENT --> SERVEUR : HTTPS + JSON\nAuthorization: Bearer
+WEB --> SERVEUR : fetch + JSON\n(meme API)
+SERVEUR --> APP : un appel de service\npar requete
+APP --> MODELE : API publique du modele
+SERVEUR ..> CONTRAT
+UI -[hidden]-> CLIENT
+
+note right of UI
+  main.py injecte soit ServiceComptes/ServiceTickets
+  (python main.py : autonome, comme au labo 3),
+  soit ClientComptes/ClientTickets
+  (python main.py --serveur) : memes fenetres.
+end note
+
+note bottom of MODELE
+  Aucune regle metier hors du modele :
+  le serveur expose, le client transporte.
+end note
+@enduml

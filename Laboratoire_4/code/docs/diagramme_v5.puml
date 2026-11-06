@@ -1,4 +1,4 @@
-@startuml diagramme_fusion_v3
+@startuml diagramme_v5
 !pragma layout elk
 skinparam classAttributeIconSize 0
 skinparam shadowing false
@@ -435,6 +435,39 @@ package "Contrat (labo 4) : types echanges entre client et serveur, sans aucune 
     dans application/traduction.py (pont entre modele et contrat).
   end note
 
+  interface GestionComptes {
+    + connecter(courriel : String, motDePasse : String) : Resultat
+    + deconnecter() : Resultat
+    + inscrire(nom : String, courriel : String, motDePasse : String, confirmation : String) : Resultat
+    + profil() : Resultat
+    + lister() : Resultat
+    + attribuerRole(numero : int, nomRole : String) : Resultat
+    + retirerRole(numero : int, nomRole : String) : Resultat
+    + desactiver(numero : int) : Resultat
+    + reactiver(numero : int) : Resultat
+  }
+
+  interface GestionTickets {
+    + lister(filtre : String, statut : Status [0..1], priorite : Priority [0..1]) : Resultat
+    + archives() : Resultat
+    + assignables() : Resultat
+    + detail(numero : int) : Resultat
+    + actionsPermises(numero : int) : FrozenSet<Permission>
+    + creer(titre : String, priorite : Priority, texte : String, images : List<String>) : Resultat
+    + ajouterTexte(numero : int, texte : String) : Resultat
+    + joindreImage(numero : int, cheminSource : String) : Resultat
+    + modifierTitre(numero : int, titre : String) : Resultat
+    + commenter(numero : int, texte : String) : Resultat
+    + assigner(numero : int, numeroAssigne : int) : Resultat
+    + soumettre(numero : int) : Resultat
+    + valider(numero : int) : Resultat
+    + rejeter(numero : int, motif : String) : Resultat
+    + fermer(numero : int, motif : String) : Resultat
+    + rouvrir(numero : int, motif : String) : Resultat
+    + changerPriorite(numero : int, priorite : Priority) : Resultat
+    + archiver(numero : int) : Resultat
+  }
+
   enum Cause {
     NON_CONNECTE
     INTROUVABLE
@@ -524,26 +557,28 @@ package "Contrat (labo 4) : types echanges entre client et serveur, sans aucune 
   }
 
   Resultat --> "0..1" Cause : cause
+  GestionComptes ..> Resultat
+  GestionTickets ..> Resultat
 }
 
-package "Interface (labo 3) : fenetres PySide6, ne dependent que de l'application" {
+package "Interface (labo 3) : fenetres PySide6, ne dependent que du contrat (labo 4)" {
 
   package "Fenetres F1 a F10" {
 
     class FenetreConnexion <<QDialog>> {
-      + <<create>> FenetreConnexion(comptes : ServiceComptes, comptesDemo : List<Tuple>)
+      + <<create>> FenetreConnexion(comptes : GestionComptes, comptesDemo : List<Tuple>)
       + connecter() : void  <<F1 : courriel et mot de passe>>
       + inscrire() : void
     }
 
     class FenetreInscription <<QDialog>> {
-      + <<create>> FenetreInscription(comptes : ServiceComptes)
+      + <<create>> FenetreInscription(comptes : GestionComptes)
       + valider() : void  <<F2 : nouveau compte Rapporteur>>
     }
 
     class FenetrePrincipale <<QMainWindow>> {
       + {static} deconnexion : Signal  <<signal Qt>>
-      + <<create>> FenetrePrincipale(comptes : ServiceComptes, tickets : ServiceTickets, taille : TailleDuTexte, aide : List<Tuple> [0..1])
+      + <<create>> FenetrePrincipale(comptes : GestionComptes, tickets : GestionTickets, taille : TailleDuTexte, aide : List<Tuple> [0..1])
       + peut(p : Permission) : boolean  <<confort d'affichage ; le modele reverifie>>
       + reglerTaille(echelle : int [0..1], pas : int) : void
       + actualiser() : void
@@ -560,14 +595,14 @@ package "Interface (labo 3) : fenetres PySide6, ne dependent que de l'applicatio
 
     class FenetreDetail <<QDialog>> {
       + {static} modifie : Signal  <<signal Qt : la liste se met a jour>>
-      + <<create>> FenetreDetail(tickets : ServiceTickets, numero : int, principale : FenetrePrincipale)
+      + <<create>> FenetreDetail(tickets : GestionTickets, numero : int, principale : FenetrePrincipale)
       + charger() : boolean  <<DetailTicket : blocs et actions permises>>
       + commenter() : void
       + agir(p : Permission) : void  <<ouvre le dialogue F6 ou F7 voulu ; le modele decide>>
     }
 
     class FenetreNouveauTicket <<QDialog>> {
-      + <<create>> FenetreNouveauTicket(tickets : ServiceTickets)
+      + <<create>> FenetreNouveauTicket(tickets : GestionTickets)
       + ajouterImage() : void
       + retirerImage() : void
       + cheminsImages() : List<String>
@@ -575,14 +610,14 @@ package "Interface (labo 3) : fenetres PySide6, ne dependent que de l'applicatio
     }
 
     class DialogueAjout <<QDialog>> {
-      + <<create>> DialogueAjout(tickets : ServiceTickets, numero : int)
+      + <<create>> DialogueAjout(tickets : GestionTickets, numero : int)
       + parcourir() : void
       + choisir(chemin : String) : void
       + ajouter() : void  <<F6 : onglet Texte ou onglet Image>>
     }
 
     class FenetreComptes <<QDialog>> {
-      + <<create>> FenetreComptes(comptes : ServiceComptes)
+      + <<create>> FenetreComptes(comptes : GestionComptes)
       + actualiser() : void  <<F8 : MANAGE_USERS>>
     }
 
@@ -679,16 +714,16 @@ _Dialogue <|-- DialogueTitre
 _Dialogue <|-- DialogueConfirmation
 _Dialogue <|-- DialogueRole
 
-FenetreConnexion --> "1" ServiceComptes : comptes
-FenetreInscription --> "1" ServiceComptes : comptes
-FenetreComptes --> "1" ServiceComptes : comptes
-FenetrePrincipale --> "1" ServiceComptes : comptes
-FenetrePrincipale --> "1" ServiceTickets : tickets
+FenetreConnexion --> "1" GestionComptes : comptes
+FenetreInscription --> "1" GestionComptes : comptes
+FenetreComptes --> "1" GestionComptes : comptes
+FenetrePrincipale --> "1" GestionComptes : comptes
+FenetrePrincipale --> "1" GestionTickets : tickets
 FenetrePrincipale --> "1" TailleDuTexte : taille
 FenetrePrincipale --> "0..*" FenetreDetail : details
-FenetreDetail --> "1" ServiceTickets : tickets
-FenetreNouveauTicket --> "1" ServiceTickets : tickets
-DialogueAjout --> "1" ServiceTickets : tickets
+FenetreDetail --> "1" GestionTickets : tickets
+FenetreNouveauTicket --> "1" GestionTickets : tickets
+DialogueAjout --> "1" GestionTickets : tickets
 FenetreConnexion ..> FenetreInscription : F2
 FenetrePrincipale ..> FenetreNouveauTicket : F5
 FenetrePrincipale ..> FenetreComptes : F8
@@ -709,5 +744,130 @@ legend bottom right
   Une methode controlee renvoie false, vide ou rien en cas de refus, sans effet de bord.
   actor : compte obtenu par UserRegistry.authenticate ; tout compte absent du registre injecte est refuse.
 endlegend
+
+package "Serveur (labo 4) : controleur REST (FastAPI), sans regle metier" {
+
+  note as NoteServeur
+    routes_comptes et routes_tickets : 16 chemins sous /api/v1
+    (fonctions de route FastAPI). Chaque route : jeton -> compte ->
+    Noyau.services(compte) -> un appel de service -> JSON, ou Refus.
+    schemas.py : representations JSON (Pydantic), publiees en OpenAPI.
+    reponses.py : table Cause -> code HTTP (401, 403, 404, 409, 422).
+  end note
+
+  class Noyau {
+    - users : UserRegistry {secret}
+    - tickets : TicketRegistry {secret}
+    - dossier : String {secret}
+    - verrou : Lock {secret}  <<un seul appel au modele a la fois>>
+    - authentifies : Map<int, User> {secret}
+    + <<create>> Noyau(users : UserRegistry, tickets : TicketRegistry, dossierTeleversement : String)
+    + services(compte : User [0..1]) : Tuple<Session, ServiceComptes, ServiceTickets>  <<sous le verrou>>
+    + connecter(courriel : String, motDePasse : String) : Tuple<Resultat, User>
+    + compte(numero : int) : User [0..1]  <<authentifie et encore actif>>
+  }
+
+  class Jetons {
+    - secret : String {secret}  <<32 octets au moins>>
+    - duree : Duration {secret}
+    + <<create>> Jetons(secret : String [0..1], duree : Duration)
+    + emettre(numero : int) : Tuple<String, DateTime>  <<JWT HS256>>
+    + lire(jeton : String) : int [0..1]
+  }
+
+  class Refus {
+    - resultat : Resultat
+    + <<create>> Refus(resultat : Resultat)
+  }
+}
+
+Noyau --> "1" UserRegistry : users
+Noyau --> "1" TicketRegistry : tickets
+Noyau ..> ServiceComptes : <<create>>
+Noyau ..> ServiceTickets : <<create>>
+Noyau ..> Session : <<create>>
+Refus --> "1" Resultat : resultat
+
+
+package "Client (labo 4) : services distants, meme interface que les services locaux (Proxy)" {
+
+  class Transport {
+    - http : HttpClient {secret}
+    - jeton : String [0..1] {secret}
+    - url : String
+    - connecte : boolean
+    - profil : Profil [0..1]
+    + <<create>> Transport(url : String [0..1], http : HttpClient [0..1])
+    + ouvrir(jeton : String, profil : Profil) : void
+    + fermer() : void  <<oublier le jeton>>
+    + retenir(profil : Profil) : void
+    + fin() : void
+    + requete(methode : String, chemin : String, delai : float, brut : boolean) : Resultat  <<401 : fermer() ; panne : INJOIGNABLE>>
+    + reveiller() : Resultat  <<GET /sante, 90 s>>
+  }
+
+  class CacheImages {
+    - transport : Transport {secret}
+    - dossier : String
+    + <<create>> CacheImages(transport : Transport, dossier : String [0..1])
+    + chemin(numero : int, blocJson : Map) : String [0..1]  <<telechargee au premier affichage>>
+    + vider() : void
+  }
+
+  class ClientComptes {
+    + <<create>> ClientComptes(transport : Transport)
+    + reveiller() : Resultat
+    + connecter(courriel : String, motDePasse : String) : Resultat
+    + deconnecter() : Resultat
+    + inscrire(nom : String, courriel : String, motDePasse : String, confirmation : String) : Resultat
+    + profil() : Resultat
+    + lister() : Resultat
+    + attribuerRole(numero : int, nomRole : String) : Resultat
+    + retirerRole(numero : int, nomRole : String) : Resultat
+    + desactiver(numero : int) : Resultat
+    + reactiver(numero : int) : Resultat
+  }
+
+  class ClientTickets {
+    + <<create>> ClientTickets(transport : Transport, images : CacheImages [0..1])
+    + lister(filtre : String, statut : Status [0..1], priorite : Priority [0..1]) : Resultat
+    + archives() : Resultat
+    + assignables() : Resultat
+    + detail(numero : int) : Resultat
+    + actionsPermises(numero : int) : FrozenSet<Permission>
+    + creer(titre : String, priorite : Priority, texte : String, images : List<String>) : Resultat
+    + ajouterTexte(numero : int, texte : String) : Resultat
+    + joindreImage(numero : int, cheminSource : String) : Resultat
+    + modifierTitre(numero : int, titre : String) : Resultat
+    + commenter(numero : int, texte : String) : Resultat
+    + assigner(numero : int, numeroAssigne : int) : Resultat
+    + soumettre(numero : int) : Resultat
+    + valider(numero : int) : Resultat
+    + rejeter(numero : int, motif : String) : Resultat
+    + fermer(numero : int, motif : String) : Resultat
+    + rouvrir(numero : int, motif : String) : Resultat
+    + changerPriorite(numero : int, priorite : Priority) : Resultat
+    + archiver(numero : int) : Resultat
+  }
+}
+
+ClientComptes --> "1" Transport : transport
+ClientTickets --> "1" Transport : transport
+ClientTickets --> "1" CacheImages : images
+CacheImages --> "1" Transport : transport
+Transport --> "0..1" Profil : profil
+GestionComptes <|.. ServiceComptes
+GestionTickets <|.. ServiceTickets
+GestionComptes <|.. ClientComptes
+GestionTickets <|.. ClientTickets
+
+
+package "Web (labo 4, bonus) : page servie par le serveur" {
+  note as NoteWeb
+    web/index.html, style.css, app.js (sans bibliotheque) : meme API REST
+    que ClientComptes et ClientTickets, par fetch et le jeton. Les donnees
+    recues ne deviennent jamais du HTML (textContent) ; politique CSP stricte.
+  end note
+}
 
 @enduml
