@@ -1,16 +1,23 @@
-# Environnement virtuel Python
-.venv/
 
-# Cache Python
+
+# Python
 __pycache__/
 *.pyc
 
-# Variables d'environnement
-.env
-
-# VS Code
+# Éditeurs
+.vs/
 .vscode/
+.idea/
 
-# Fichiers système
-.DS_Store
-Thumbs.db
+# Fichiers créés au lancement (fichiers de départ, téléversements, exports PDF)
+Partie_2/code/donnees/
+
+# Source Word du rapport : seule la version PDF est remise
+Partie_2/*.docx
+
+# Environnements virtuels et archives de remise
+.venv/
+*.zip
+Laboratoire_3/*.docx
+Laboratoire_3/*.pdf
+>>>>>>> 80fd48d9dbfc73b2866c1c77b156b26950795bc2

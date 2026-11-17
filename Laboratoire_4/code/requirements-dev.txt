@@ -1,0 +1,4 @@
+# Tests et outils de remise (en plus des deux autres fichiers)
+-r requirements.txt
+-r requirements-serveur.txt
+pyyaml>=6.0

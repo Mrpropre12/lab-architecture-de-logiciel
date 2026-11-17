@@ -1,0 +1,346 @@
+@startuml diagramme_fusion_v3
+!pragma layout elk
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam nodesep 50
+skinparam ranksep 60
+hide empty members
+
+package "Qui agit : une identite + des roles attribues a l'execution (RBAC)" {
+
+  class User {
+    - userID : int
+    - name : String
+    - email : String {unique}
+    - active : boolean
+    ~ <<create>> User(id : int, name : String, email : String)
+    ~ getEmail() : String
+    ~ addRole(r : Role) : void
+    ~ removeRole(r : Role) : void
+    ~ deactivate() : void
+    ~ reactivate() : void
+    + getRoles() : FrozenSet<Role>
+    + canGlobally(p : Permission) : boolean  <<faux si compte desactive>>
+  }
+
+  interface Role {
+    + name() : String
+    + permissions() : FrozenSet<Permission>
+    + allows(p : Permission) : boolean
+  }
+
+  abstract class BaseRole {
+    - granted : FrozenSet<Permission>
+    # <<create>> BaseRole(granted : FrozenSet<Permission>)
+    + permissions() : FrozenSet<Permission>
+    + allows(p : Permission) : boolean
+    + equals(o : Object) : boolean  <<meme classe de role>>
+    + hash() : int  <<coherent avec equals>>
+    + {abstract} name() : String
+  }
+
+  class ReporterRole {
+    - {static} PERMISSIONS : FrozenSet<Permission> = {VIEW, COMMENT, EXPORT, CREATE, EDIT, ATTACH}
+    + name() : String
+  }
+
+  class DeveloperRole {
+    - {static} PERMISSIONS : FrozenSet<Permission> = {ASSIGN, SUBMIT, VALIDATE, REJECT, CLOSE, VIEW_ALL}
+    + name() : String
+  }
+
+  class AdminRole {
+    - {static} PERMISSIONS : FrozenSet<Permission> = {REOPEN, SET_PRIORITY, ARCHIVE, MANAGE_USERS}
+    + name() : String
+  }
+
+  enum Permission {
+    VIEW
+    COMMENT
+    EXPORT
+    CREATE
+    EDIT
+    ATTACH
+    ASSIGN
+    SUBMIT
+    VALIDATE
+    REJECT
+    CLOSE
+    REOPEN
+    SET_PRIORITY
+    ARCHIVE
+    VIEW_ALL
+    MANAGE_USERS
+  }
+
+  class UserRegistry {
+    - nextID : int
+    + <<create>> UserRegistry(adminName : String, adminEmail : String)  <<cree le premier admin, aucun amorcage ulterieur>>
+    + contains(u : User) : boolean  <<compte de ce registre, ni copie ni faux>>
+    + register(name : String, email : String) : User [0..1]  <<inscription libre, ReporterRole seul, email unique>>
+    + findByID(actor : User, id : int) : User [0..1]  <<comptes actifs ; desactives avec MANAGE_USERS>>
+    + findAll(actor : User) : List<User>  <<MANAGE_USERS>>
+    + grantRole(actor : User, target : User, r : Role) : boolean  <<MANAGE_USERS ; AdminRole ajoute DeveloperRole>>
+    + revokeRole(actor : User, target : User, r : Role) : boolean  <<MANAGE_USERS ; ni ReporterRole, ni DeveloperRole d'un admin, ni le dernier AdminRole actif>>
+    + deactivate(actor : User, target : User) : boolean  <<MANAGE_USERS ; reste auteur et assigne ; pas le dernier admin actif>>
+    + reactivate(actor : User, target : User) : boolean  <<MANAGE_USERS>>
+  }
+
+  Role <|.. BaseRole
+  BaseRole <|-- ReporterRole
+  BaseRole <|-- DeveloperRole
+  BaseRole <|-- AdminRole
+  User "0..*" o-- "1..*" Role : assignedRoles {contient toujours ReporterRole ; AdminRole implique DeveloperRole ; sans doublon}
+  User "0..*" --o "1" UserRegistry : users
+}
+
+package "Le ticket : cycle de vie (State) et description" {
+
+  class Ticket {
+    - ticketID : int
+    - title : String
+    - priority : Priority
+    - creationDate : DateTime
+    - updateDate : DateTime
+    - archiveDate : DateTime [0..1]
+    - nextCommentID : int
+    ~ <<create>> Ticket(id : int, author : User, title : String, p : Priority, users : UserRegistry)
+    + edit(actor : User, title : String) : boolean  <<auteur, si allowsEdit()>>
+    + assign(actor : User, assignee : User) : boolean  <<l'assigne doit avoir SUBMIT>>
+    + submit(actor : User) : boolean
+    + validate(actor : User) : boolean
+    + reject(actor : User, reason : String) : boolean  <<motif ajoute en commentaire>>
+    + close(actor : User, reason : String) : boolean  <<motif ajoute en commentaire>>
+    + reopen(actor : User, reason : String) : boolean  <<motif ajoute en commentaire>>
+    + setPriority(actor : User, p : Priority) : boolean
+    + addComment(author : User, text : String) : Comment [0..1]  <<COMMENT + visible>>
+    + addContent(actor : User, c : Content) : boolean  <<auteur, si allowsEdit()>>
+    + consult(actor : User, v : ViewVisitor) : boolean  <<VIEW + visible>>
+    + export(actor : User, v : ExportVisitor) : boolean  <<EXPORT + visible>>
+    + getStatus() : Status
+    + getAuthor() : User
+    + getAssignee() : User [0..1]
+    + isArchived() : boolean
+    + isVisibleTo(u : User) : boolean  <<auteur, assigne ou VIEW_ALL>>
+    - accept(v : TicketVisitor) : void
+    - authorize(actor : User, p : Permission) : boolean  <<droit global ; archive = VIEW et EXPORT seuls>>
+    - isAuthor(u : User) : boolean  <<droit contextuel>>
+    ~ setState(s : TicketState) : void
+    ~ setAssignee(u : User [0..1]) : void
+    ~ markArchived() : void
+    ~ touch() : void
+  }
+
+  class Comment {
+    - commentID : int
+    - text : String
+    - postedAt : DateTime
+    ~ <<create>> Comment(id : int, author : User, text : String)
+    + getAuthor() : User
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  enum Priority {
+    BASSE
+    NORMALE
+    HAUTE
+  }
+
+  class TicketRegistry {
+    - nextID : int
+    + <<create>> TicketRegistry(users : UserRegistry)  <<registre des comptes injecte>>
+    + create(author : User, title : String, p : Priority) : Ticket [0..1]
+    + archive(actor : User, id : int) : boolean  <<ARCHIVE, si TERMINE ou FERME, definitif>>
+    + findByID(actor : User, id : int) : Ticket [0..1]  <<si visible, archives compris>>
+    + findAll(actor : User) : List<Ticket>  <<VIEW_ALL>>
+    + findByAuthor(actor : User, u : User) : List<Ticket>
+    + findByAssignee(actor : User, u : User) : List<Ticket>
+    + findByStatus(actor : User, s : Status) : List<Ticket>
+    + findByPriority(actor : User, p : Priority) : List<Ticket>
+    + findArchived(actor : User) : List<Ticket>  <<archives visibles par l'acteur>>
+    - activeVisibleTo(actor : User) : List<Ticket>  <<non archives et visibles, base des autres recherches>>
+  }
+
+  abstract class TicketState {
+    ~ assign(t : Ticket, actor : User, assignee : User) : boolean
+    ~ submit(t : Ticket, actor : User) : boolean
+    ~ validate(t : Ticket, actor : User) : boolean
+    ~ reject(t : Ticket, actor : User, reason : String) : boolean
+    ~ close(t : Ticket, actor : User, reason : String) : boolean
+    ~ reopen(t : Ticket, actor : User, reason : String) : boolean
+    + allowsEdit() : boolean
+    + {abstract} name() : Status
+    # isAssignee(t : Ticket, u : User) : boolean  <<droit contextuel>>
+  }
+
+  class OpenState <<OUVERT>> {
+    ~ assign(...) : boolean  <<vers ASSIGNE>>
+    ~ close(...) : boolean  <<vers FERME>>
+    + name() : Status
+  }
+
+  class AssignedState <<ASSIGNE>> {
+    ~ assign(...) : boolean  <<reassignation, meme si l'assigne est desactive>>
+    ~ submit(...) : boolean  <<vers VALIDATION, par l'assigne seul>>
+    ~ close(...) : boolean  <<vers FERME>>
+    + name() : Status
+  }
+
+  class ValidationState <<VALIDATION>> {
+    ~ validate(...) : boolean  <<vers TERMINE, pas par l'assigne>>
+    ~ reject(...) : boolean  <<retour a ASSIGNE, pas par l'assigne>>
+    ~ close(...) : boolean  <<vers FERME>>
+    + name() : Status
+  }
+
+  class TerminatedState <<TERMINE>> {
+    ~ reopen(...) : boolean  <<vers OUVERT, sans assigne>>
+    + allowsEdit() : boolean  <<false>>
+    + name() : Status
+  }
+
+  class ClosedState <<FERME>> {
+    ~ reopen(...) : boolean  <<vers OUVERT, sans assigne>>
+    + allowsEdit() : boolean  <<false>>
+    + name() : Status
+  }
+
+  enum Status {
+    OUVERT
+    ASSIGNE
+    VALIDATION
+    TERMINE
+    FERME
+  }
+
+  TicketState <|-- OpenState
+  TicketState <|-- AssignedState
+  TicketState <|-- ValidationState
+  TicketState <|-- TerminatedState
+  TicketState <|-- ClosedState
+
+  abstract class Content {
+    # path : String
+    # loaded : boolean
+    ~ {abstract} isValid() : boolean
+    + {abstract} load() : boolean
+    ~ {abstract} accept(v : TicketVisitor) : void
+  }
+
+  class TextFileContent {
+    - text : String [0..1]
+    ~ <<create>> TextFileContent(path : String)
+    ~ isValid() : boolean  <<.txt en UTF-8, 1 Mo maximum>>
+    + load() : boolean  <<lu immediatement>>
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  class ImageFileContent {
+    - width : int [0..1]
+    - height : int [0..1]
+    ~ <<create>> ImageFileContent(path : String)
+    ~ isValid() : boolean  <<.png, .jpg ou .gif, 10 Mo maximum>>
+    + load() : boolean  <<lu au premier affichage, mis en cache>>
+    + unload() : void  <<libere le cache>>
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  class VideoFileContent {
+    - duration : int [0..1]
+    ~ <<create>> VideoFileContent(path : String)
+    ~ isValid() : boolean  <<.mp4, .mov ou .avi, 500 Mo maximum>>
+    + load() : boolean  <<jamais lu, chemin conserve>>
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  Content <|-- TextFileContent
+  Content <|-- ImageFileContent
+  Content <|-- VideoFileContent
+
+  package "Acces aux fichiers : Fabrique et confinement" {
+
+    class ContentFactory {
+      - {static} UPLOAD_DIR : String
+      + {static} fromPath(path : String) : Content [0..1]  <<dans UPLOAD_DIR, type selon l'extension, puis isValid()>>
+    }
+
+    class PathGuard {
+      + {static} confine(path : String, root : String) : String [0..1]  <<rien si le chemin sort de root>>
+    }
+
+    ContentFactory ..> Content : <<cree>>
+    ContentFactory ..> PathGuard
+  }
+
+  package "Contrat du Visiteur" {
+
+    interface TicketVisitor {
+      + visitTicket(t : Ticket) : void
+      + visitComment(c : Comment) : void
+      + visitText(c : TextFileContent) : void
+      + visitImage(c : ImageFileContent) : void
+      + visitVideo(c : VideoFileContent) : void
+    }
+
+    interface ViewVisitor {
+      + result() : String
+    }
+
+    interface ExportVisitor {
+      + result() : File [0..1]  <<rien avant un export reussi>>
+    }
+
+    TicketVisitor <|-- ViewVisitor
+    TicketVisitor <|-- ExportVisitor
+  }
+}
+
+package "Consultation et export" {
+
+  class ScreenRenderVisitor {
+    - output : String
+    + visitTicket(t : Ticket) : void
+    + visitComment(c : Comment) : void
+    + visitText(c : TextFileContent) : void
+    + visitImage(c : ImageFileContent) : void  <<load() au premier affichage>>
+    + visitVideo(c : VideoFileContent) : void  <<chemin seulement>>
+    + result() : String
+  }
+
+  class PDFExportVisitor {
+    - {static} EXPORT_DIR : String
+    - targetPath : String
+    + <<create>> PDFExportVisitor()  <<nom de fichier unique genere dans EXPORT_DIR>>
+    + visitTicket(t : Ticket) : void
+    + visitComment(c : Comment) : void
+    + visitText(c : TextFileContent) : void
+    + visitImage(c : ImageFileContent) : void  <<image integree>>
+    + visitVideo(c : VideoFileContent) : void  <<chemin seulement>>
+    + result() : File [0..1]
+  }
+
+  ViewVisitor <|.. ScreenRenderVisitor
+  ExportVisitor <|.. PDFExportVisitor
+}
+
+User "1" <-- "0..*" Ticket : author
+User "0..1" <-- "0..*" Ticket : assignee {assignee.canGlobally(SUBMIT) a l'assignation ; aucun en OUVERT}
+Ticket "0..*" --> "1" TicketState : state
+Ticket "1" *-- "0..*" Comment : comments
+Ticket "1" *-- "0..*" Content : description
+User "1" <-- "0..*" Comment : author
+Ticket "0..*" --o "1" TicketRegistry : tickets
+TicketRegistry "0..*" --> "1" UserRegistry : comptes
+Ticket "0..*" --> "1" UserRegistry : comptes
+Ticket ..> TicketVisitor : accept
+PDFExportVisitor ..> PathGuard
+
+legend bottom right
+  Convention : chaque attribut du compartiment a un accesseur public en lecture (getX), non dessine, sauf s'il est dessine avec une autre visibilite.
+  Les extremites d'association n'ont que les accesseurs dessines. Les seuls mutateurs sont ceux dessines.
+  Une methode controlee renvoie false, vide ou rien en cas de refus, sans effet de bord.
+  actor : compte authentifie fourni par la couche appelante (authentification hors perimetre) ; tout compte absent du registre injecte est refuse.
+endlegend
+
+@enduml

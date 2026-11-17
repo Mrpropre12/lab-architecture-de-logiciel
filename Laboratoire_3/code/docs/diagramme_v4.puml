@@ -1,0 +1,653 @@
+@startuml diagramme_fusion_v3
+!pragma layout elk
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam nodesep 50
+skinparam ranksep 60
+hide empty members
+
+package "Qui agit : une identite + des roles attribues a l'execution (RBAC)" {
+
+  class User {
+    - userID : int
+    - name : String
+    - email : String {unique}
+    - active : boolean
+    ~ <<create>> User(id : int, name : String, email : String)
+    ~ getEmail() : String
+    ~ addRole(r : Role) : void
+    ~ removeRole(r : Role) : void
+    ~ deactivate() : void
+    ~ reactivate() : void
+    + getRoles() : FrozenSet<Role>
+    + canGlobally(p : Permission) : boolean  <<faux si compte desactive>>
+  }
+
+  interface Role {
+    + name() : String
+    + permissions() : FrozenSet<Permission>
+    + allows(p : Permission) : boolean
+  }
+
+  abstract class BaseRole {
+    - granted : FrozenSet<Permission>
+    # <<create>> BaseRole(granted : FrozenSet<Permission>)
+    + permissions() : FrozenSet<Permission>
+    + allows(p : Permission) : boolean
+    + equals(o : Object) : boolean  <<meme classe de role>>
+    + hash() : int  <<coherent avec equals>>
+    + {abstract} name() : String
+  }
+
+  class ReporterRole {
+    - {static} PERMISSIONS : FrozenSet<Permission> = {VIEW, COMMENT, EXPORT, CREATE, EDIT, ATTACH}
+    + name() : String
+  }
+
+  class DeveloperRole {
+    - {static} PERMISSIONS : FrozenSet<Permission> = {ASSIGN, SUBMIT, VALIDATE, REJECT, CLOSE, VIEW_ALL}
+    + name() : String
+  }
+
+  class AdminRole {
+    - {static} PERMISSIONS : FrozenSet<Permission> = {REOPEN, SET_PRIORITY, ARCHIVE, MANAGE_USERS}
+    + name() : String
+  }
+
+  enum Permission {
+    VIEW
+    COMMENT
+    EXPORT
+    CREATE
+    EDIT
+    ATTACH
+    ASSIGN
+    SUBMIT
+    VALIDATE
+    REJECT
+    CLOSE
+    REOPEN
+    SET_PRIORITY
+    ARCHIVE
+    VIEW_ALL
+    MANAGE_USERS
+  }
+
+  class UserRegistry {
+    - nextID : int
+    - {secret} credentials : Map<int, Object>  <<iterations, sel, empreinte ; jamais le mot de passe>>
+    + {static} PBKDF2_ITERATIONS : int = 600000
+    + <<create>> UserRegistry(adminName : String, adminEmail : String, adminPassword : String)  <<cree le premier admin, aucun amorcage ulterieur>>
+    + contains(u : User) : boolean  <<compte de ce registre, ni copie ni faux>>
+    + register(name : String, email : String, password : String) : User [0..1]  <<inscription libre, ReporterRole seul, email unique, mot de passe de 8 a 128 caracteres>>
+    + authenticate(email : String, password : String) : User [0..1]  <<PBKDF2-HMAC-SHA256 sale ; compte actif ; motif d'echec generique>>
+    + findByID(actor : User, id : int) : User [0..1]  <<comptes actifs ; desactives avec MANAGE_USERS>>
+    + findAll(actor : User) : List<User>  <<MANAGE_USERS>>
+    + grantRole(actor : User, target : User, r : Role) : boolean  <<MANAGE_USERS ; AdminRole ajoute DeveloperRole>>
+    + revokeRole(actor : User, target : User, r : Role) : boolean  <<MANAGE_USERS ; ni ReporterRole, ni DeveloperRole d'un admin, ni le dernier AdminRole actif>>
+    + deactivate(actor : User, target : User) : boolean  <<MANAGE_USERS ; reste auteur et assigne ; pas le dernier admin actif>>
+    + reactivate(actor : User, target : User) : boolean  <<MANAGE_USERS>>
+  }
+
+  Role <|.. BaseRole
+  BaseRole <|-- ReporterRole
+  BaseRole <|-- DeveloperRole
+  BaseRole <|-- AdminRole
+  User "0..*" o-- "1..*" Role : assignedRoles {contient toujours ReporterRole ; AdminRole implique DeveloperRole ; sans doublon}
+  User "0..*" --o "1" UserRegistry : users
+}
+
+package "Le ticket : cycle de vie (State) et description" {
+
+  class Ticket {
+    - ticketID : int
+    - title : String
+    - priority : Priority
+    - creationDate : DateTime
+    - updateDate : DateTime
+    - archiveDate : DateTime [0..1]
+    - nextCommentID : int
+    ~ <<create>> Ticket(id : int, author : User, title : String, p : Priority, users : UserRegistry)
+    + edit(actor : User, title : String) : boolean  <<auteur, si allowsEdit()>>
+    + assign(actor : User, assignee : User) : boolean  <<l'assigne doit avoir SUBMIT>>
+    + submit(actor : User) : boolean
+    + validate(actor : User) : boolean
+    + reject(actor : User, reason : String) : boolean  <<motif ajoute en commentaire>>
+    + close(actor : User, reason : String) : boolean  <<motif ajoute en commentaire>>
+    + reopen(actor : User, reason : String) : boolean  <<motif ajoute en commentaire>>
+    + setPriority(actor : User, p : Priority) : boolean
+    + addComment(author : User, text : String) : Comment [0..1]  <<COMMENT + visible>>
+    + addContent(actor : User, c : Content) : boolean  <<auteur, si allowsEdit()>>
+    + consult(actor : User, v : ViewVisitor) : boolean  <<VIEW + visible>>
+    + export(actor : User, v : ExportVisitor) : boolean  <<EXPORT + visible>>
+    + getStatus() : Status
+    + getAuthor() : User
+    + getAssignee() : User [0..1]
+    + isArchived() : boolean
+    + isVisibleTo(u : User) : boolean  <<auteur, assigne ou VIEW_ALL>>
+    - accept(v : TicketVisitor) : void
+    + allowedActions(actor : User) : FrozenSet<Permission>  <<memes essais que les actions, apply = faux : aucun effet, aucun motif>>
+    ~ tryArchive(actor : User, apply : boolean) : boolean  <<TERMINE ou FERME, pas deja archive ; appele par TicketRegistry.archive>>
+    - authorize(actor : User, p : Permission, apply : boolean) : boolean  <<droit global ; archive = VIEW et EXPORT seuls>>
+    - isAuthor(u : User) : boolean  <<droit contextuel>>
+    ~ setState(s : TicketState) : void
+    ~ setAssignee(u : User [0..1]) : void
+    ~ markArchived() : void
+    ~ touch() : void
+  }
+
+  class Comment {
+    - commentID : int
+    - text : String
+    - postedAt : DateTime
+    ~ <<create>> Comment(id : int, author : User, text : String)
+    + getAuthor() : User
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  enum Priority {
+    BASSE
+    NORMALE
+    HAUTE
+  }
+
+  class TicketRegistry {
+    - nextID : int
+    + <<create>> TicketRegistry(users : UserRegistry)  <<registre des comptes injecte>>
+    + create(author : User, title : String, p : Priority) : Ticket [0..1]
+    + archive(actor : User, id : int) : boolean  <<ARCHIVE, si TERMINE ou FERME, definitif>>
+    + findByID(actor : User, id : int) : Ticket [0..1]  <<si visible, archives compris>>
+    + findAll(actor : User) : List<Ticket>  <<VIEW_ALL>>
+    + findByAuthor(actor : User, u : User) : List<Ticket>
+    + findByAssignee(actor : User, u : User) : List<Ticket>
+    + findByStatus(actor : User, s : Status) : List<Ticket>
+    + findByPriority(actor : User, p : Priority) : List<Ticket>
+    + findArchived(actor : User) : List<Ticket>  <<archives visibles par l'acteur>>
+    - activeVisibleTo(actor : User) : List<Ticket>  <<non archives et visibles, base des autres recherches>>
+  }
+
+  abstract class TicketState {
+    ~ assign(t : Ticket, actor : User, assignee : User, apply : boolean) : boolean
+    ~ submit(t : Ticket, actor : User, apply : boolean) : boolean
+    ~ validate(t : Ticket, actor : User, apply : boolean) : boolean
+    ~ reject(t : Ticket, actor : User, reason : String, apply : boolean) : boolean
+    ~ close(t : Ticket, actor : User, reason : String, apply : boolean) : boolean
+    ~ reopen(t : Ticket, actor : User, reason : String, apply : boolean) : boolean
+    + allowsEdit() : boolean
+    + {abstract} name() : Status
+    # isAssignee(t : Ticket, u : User) : boolean  <<droit contextuel>>
+  }
+
+  class OpenState <<OUVERT>> {
+    ~ assign(...) : boolean  <<vers ASSIGNE>>
+    ~ close(...) : boolean  <<vers FERME>>
+    + name() : Status
+  }
+
+  class AssignedState <<ASSIGNE>> {
+    ~ assign(...) : boolean  <<reassignation, meme si l'assigne est desactive>>
+    ~ submit(...) : boolean  <<vers VALIDATION, par l'assigne seul>>
+    ~ close(...) : boolean  <<vers FERME>>
+    + name() : Status
+  }
+
+  class ValidationState <<VALIDATION>> {
+    ~ validate(...) : boolean  <<vers TERMINE, pas par l'assigne>>
+    ~ reject(...) : boolean  <<retour a ASSIGNE, pas par l'assigne>>
+    ~ close(...) : boolean  <<vers FERME>>
+    + name() : Status
+  }
+
+  class TerminatedState <<TERMINE>> {
+    ~ reopen(...) : boolean  <<vers OUVERT, sans assigne>>
+    + allowsEdit() : boolean  <<false>>
+    + name() : Status
+  }
+
+  class ClosedState <<FERME>> {
+    ~ reopen(...) : boolean  <<vers OUVERT, sans assigne>>
+    + allowsEdit() : boolean  <<false>>
+    + name() : Status
+  }
+
+  enum Status {
+    OUVERT
+    ASSIGNE
+    VALIDATION
+    TERMINE
+    FERME
+  }
+
+  TicketState <|-- OpenState
+  TicketState <|-- AssignedState
+  TicketState <|-- ValidationState
+  TicketState <|-- TerminatedState
+  TicketState <|-- ClosedState
+
+  abstract class Content {
+    # path : String
+    # loaded : boolean
+    ~ {abstract} isValid() : boolean
+    + {abstract} load() : boolean
+    ~ {abstract} accept(v : TicketVisitor) : void
+  }
+
+  class TextFileContent {
+    - text : String [0..1]
+    ~ <<create>> TextFileContent(path : String)
+    ~ isValid() : boolean  <<.txt en UTF-8, 1 Mo maximum>>
+    + load() : boolean  <<lu immediatement>>
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  class ImageFileContent {
+    - width : int [0..1]
+    - height : int [0..1]
+    ~ <<create>> ImageFileContent(path : String)
+    ~ isValid() : boolean  <<.png, .jpg ou .gif, 10 Mo maximum>>
+    + load() : boolean  <<lu au premier affichage, mis en cache>>
+    + unload() : void  <<libere le cache>>
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  class VideoFileContent {
+    - duration : int [0..1]
+    ~ <<create>> VideoFileContent(path : String)
+    ~ isValid() : boolean  <<.mp4, .mov ou .avi, 500 Mo maximum>>
+    + load() : boolean  <<jamais lu, chemin conserve>>
+    ~ accept(v : TicketVisitor) : void
+  }
+
+  Content <|-- TextFileContent
+  Content <|-- ImageFileContent
+  Content <|-- VideoFileContent
+
+  package "Acces aux fichiers : Fabrique et confinement" {
+
+    class ContentFactory {
+      - {static} UPLOAD_DIR : String
+      + {static} fromPath(path : String) : Content [0..1]  <<dans UPLOAD_DIR, type selon l'extension, puis isValid()>>
+    }
+
+    class PathGuard {
+      + {static} confine(path : String, root : String) : String [0..1]  <<rien si le chemin sort de root>>
+    }
+
+    ContentFactory ..> Content : <<cree>>
+    ContentFactory ..> PathGuard
+  }
+
+  package "Contrat du Visiteur" {
+
+    interface TicketVisitor {
+      + visitTicket(t : Ticket) : void
+      + visitComment(c : Comment) : void
+      + visitText(c : TextFileContent) : void
+      + visitImage(c : ImageFileContent) : void
+      + visitVideo(c : VideoFileContent) : void
+    }
+
+    interface ViewVisitor {
+      + result() : String
+    }
+
+    interface ExportVisitor {
+      + result() : File [0..1]  <<rien avant un export reussi>>
+    }
+
+    TicketVisitor <|-- ViewVisitor
+    TicketVisitor <|-- ExportVisitor
+  }
+}
+
+package "Consultation et export" {
+
+  class ScreenRenderVisitor {
+    - output : String
+    + visitTicket(t : Ticket) : void
+    + visitComment(c : Comment) : void
+    + visitText(c : TextFileContent) : void
+    + visitImage(c : ImageFileContent) : void  <<load() au premier affichage>>
+    + visitVideo(c : VideoFileContent) : void  <<chemin seulement>>
+    + result() : String
+  }
+
+  class DescriptionVisitor {
+    + visitTicket(t : Ticket) : void
+    + visitComment(c : Comment) : void
+    + visitText(c : TextFileContent) : void
+    + visitImage(c : ImageFileContent) : void  <<load() au premier affichage>>
+    + visitVideo(c : VideoFileContent) : void  <<signalee, non affichee>>
+    + result() : String  <<version texte, alternative textuelle>>
+    + blocks() : List<Object>  <<BlocTicket, BlocTexte, BlocImage, BlocVideo, BlocCommentaire ; sans Qt>>
+  }
+
+  class PDFExportVisitor {
+    - {static} EXPORT_DIR : String
+    - targetPath : String
+    + <<create>> PDFExportVisitor()  <<nom de fichier unique genere dans EXPORT_DIR>>
+    + visitTicket(t : Ticket) : void
+    + visitComment(c : Comment) : void
+    + visitText(c : TextFileContent) : void
+    + visitImage(c : ImageFileContent) : void  <<image integree>>
+    + visitVideo(c : VideoFileContent) : void  <<chemin seulement>>
+    + result() : File [0..1]
+  }
+
+  ViewVisitor <|.. ScreenRenderVisitor
+  ViewVisitor <|.. DescriptionVisitor
+  ExportVisitor <|.. PDFExportVisitor
+}
+
+User "1" <-- "0..*" Ticket : author
+User "0..1" <-- "0..*" Ticket : assignee {assignee.canGlobally(SUBMIT) a l'assignation ; aucun en OUVERT}
+Ticket "0..*" --> "1" TicketState : state
+Ticket "1" *-- "0..*" Comment : comments
+Ticket "1" *-- "0..*" Content : description
+User "1" <-- "0..*" Comment : author
+Ticket "0..*" --o "1" TicketRegistry : tickets
+TicketRegistry "0..*" --> "1" UserRegistry : comptes
+Ticket "0..*" --> "1" UserRegistry : comptes
+Ticket ..> TicketVisitor : accept
+PDFExportVisitor ..> PathGuard
+
+
+package "Application (labo 3) : services sans Qt, entre l'interface et le modele" {
+
+  class Session {
+    - users : UserRegistry
+    - tickets : TicketRegistry
+    - connecte : User [0..1]  <<compte obtenu par authenticate>>
+    + <<create>> Session(users : UserRegistry, tickets : TicketRegistry)
+    + ouvrir(compte : User) : void
+    + fermer() : void
+    + peut(p : Permission) : boolean  <<confort d'affichage ; le modele reverifie>>
+  }
+
+  class ServiceComptes {
+    + <<create>> ServiceComptes(session : Session)
+    + connecter(courriel : String, motDePasse : String) : Resultat
+    + deconnecter() : Resultat
+    + inscrire(nom : String, courriel : String, motDePasse : String, confirmation : String) : Resultat
+    + profil() : Resultat
+    + lister() : Resultat  <<MANAGE_USERS>>
+    + attribuerRole(numero : int, nomRole : String) : Resultat
+    + retirerRole(numero : int, nomRole : String) : Resultat
+    + desactiver(numero : int) : Resultat
+    + reactiver(numero : int) : Resultat
+  }
+
+  class ServiceTickets {
+    + <<create>> ServiceTickets(session : Session, importateur : ImportFichiers)
+    + lister(filtre : String, statut : Status [0..1], priorite : Priority [0..1]) : Resultat
+    + archives() : Resultat
+    + assignables() : Resultat
+    + detail(numero : int) : Resultat  <<DescriptionVisitor et allowedActions>>
+    + actionsPermises(numero : int) : FrozenSet<Permission>
+    + creer(titre : String, priorite : Priority, texte : String, images : List<String>) : Resultat
+    + ajouterTexte(numero : int, texte : String) : Resultat
+    + joindreImage(numero : int, cheminSource : String) : Resultat
+    + modifierTitre(numero : int, titre : String) : Resultat
+    + commenter(numero : int, texte : String) : Resultat
+    + assigner(numero : int, numeroAssigne : int) : Resultat
+    + soumettre(numero : int) : Resultat
+    + valider(numero : int) : Resultat
+    + rejeter(numero : int, motif : String) : Resultat
+    + fermer(numero : int, motif : String) : Resultat
+    + rouvrir(numero : int, motif : String) : Resultat
+    + changerPriorite(numero : int, priorite : Priority) : Resultat
+    + archiver(numero : int) : Resultat
+  }
+
+  class ImportFichiers {
+    - dossier : String  <<dossier de televersement, injecte>>
+    + <<create>> ImportFichiers(dossier : String)
+    + importerImage(cheminSource : String) : Resultat  <<copie sous un nom unique, puis ContentFactory>>
+    + enregistrerTexte(texte : String) : Resultat  <<texte tape -> .txt, puis ContentFactory>>
+    + supprimer(nomOuChemin : String) : void
+  }
+
+  class CaptureMotif {
+    + {static} JOURNAL : String = "gestion_tickets"
+    - motif : String [0..1]  <<dernier motif du journal, sans « refus : »>>
+    + emit(record : LogRecord) : void
+    + motifOu(defaut : String) : String
+  }
+
+  class Resultat <<dataclass>> {
+    + ok : boolean
+    + motif : String [0..1]
+    + valeur : Object [0..1]
+    + details : List<String>
+    + {static} succes(valeur : Object, details : List<String>) : Resultat
+    + {static} echec(motif : String, details : List<String>) : Resultat
+  }
+
+  class LigneTicket <<dataclass>> {
+    + numero : int
+    + titre : String
+    + statut : Status
+    + priorite : Priority
+    + auteur : String
+    + assigne : String [0..1]
+    + modifieLe : DateTime
+    + archive : boolean
+  }
+
+  class DetailTicket <<dataclass>> {
+    + numero : int
+    + blocs : List<Object>
+    + actions : FrozenSet<Permission>
+    + texte : String
+  }
+
+  class CompteVue <<dataclass>> {
+    + numero : int
+    + nom : String
+    + roles : List<String>
+    + actif : boolean
+  }
+
+  class Profil <<dataclass>> {
+    + numero : int
+    + nom : String
+    + roles : List<String>
+    + permissions : List<Permission>
+  }
+}
+
+ServiceComptes --> "1" Session : session
+ServiceTickets --> "1" Session : session
+ServiceTickets --> "1" ImportFichiers : importateur
+Session --> "1" UserRegistry : users
+Session --> "1" TicketRegistry : tickets
+ServiceTickets ..> DescriptionVisitor : <<use>>
+ImportFichiers ..> ContentFactory : <<use>>
+
+
+package "Interface (labo 3) : fenetres PySide6, ne dependent que de l'application" {
+
+  package "Fenetres F1 a F10" {
+
+    class FenetreConnexion <<QDialog>> {
+      + <<create>> FenetreConnexion(comptes : ServiceComptes, comptesDemo : List<Tuple>)
+      + connecter() : void  <<F1 : courriel et mot de passe>>
+      + inscrire() : void
+    }
+
+    class FenetreInscription <<QDialog>> {
+      + <<create>> FenetreInscription(comptes : ServiceComptes)
+      + valider() : void  <<F2 : nouveau compte Rapporteur>>
+    }
+
+    class FenetrePrincipale <<QMainWindow>> {
+      + {static} deconnexion : Signal  <<signal Qt>>
+      + <<create>> FenetrePrincipale(comptes : ServiceComptes, tickets : ServiceTickets, taille : TailleDuTexte, aide : List<Tuple> [0..1])
+      + peut(p : Permission) : boolean  <<confort d'affichage ; le modele reverifie>>
+      + reglerTaille(echelle : int [0..1], pas : int) : void
+      + actualiser() : void
+      + numeroSelectionne() : int [0..1]
+      + ouvrirIndex(index : QModelIndex) : void
+      + ouvrirSelection() : void
+      + ouvrirTicket(numero : int) : void  <<une FenetreDetail non modale par ticket>>
+      + nouveauTicket() : void
+      + ouvrirProfil() : void
+      + ouvrirGestionComptes() : void
+      + ouvrirAide() : void
+      + seDeconnecter() : void
+    }
+
+    class FenetreDetail <<QDialog>> {
+      + {static} modifie : Signal  <<signal Qt : la liste se met a jour>>
+      + <<create>> FenetreDetail(tickets : ServiceTickets, numero : int, principale : FenetrePrincipale)
+      + charger() : boolean  <<DetailTicket : blocs et actions permises>>
+      + commenter() : void
+      + agir(p : Permission) : void  <<ouvre le dialogue F6 ou F7 voulu ; le modele decide>>
+    }
+
+    class FenetreNouveauTicket <<QDialog>> {
+      + <<create>> FenetreNouveauTicket(tickets : ServiceTickets)
+      + ajouterImage() : void
+      + retirerImage() : void
+      + cheminsImages() : List<String>
+      + creer() : void  <<F5 : titre, priorite, texte et images>>
+    }
+
+    class DialogueAjout <<QDialog>> {
+      + <<create>> DialogueAjout(tickets : ServiceTickets, numero : int)
+      + parcourir() : void
+      + choisir(chemin : String) : void
+      + ajouter() : void  <<F6 : onglet Texte ou onglet Image>>
+    }
+
+    class FenetreComptes <<QDialog>> {
+      + <<create>> FenetreComptes(comptes : ServiceComptes)
+      + actualiser() : void  <<F8 : MANAGE_USERS>>
+    }
+
+    class DialogueRole {
+      - role : String
+      + <<create>> DialogueRole(titre : String, nom : String, roles : List<String>, texteOk : String)
+    }
+
+    class FenetreProfil <<QDialog>> {
+      + <<create>> FenetreProfil(profil : Profil)
+    }
+
+    class FenetreAide <<QDialog>> {
+      + <<create>> FenetreAide(comptesDemo : List<Tuple>)
+    }
+  }
+
+  package "Dialogues d'action F7" {
+
+    class _Dialogue <<QDialog>> {
+      + <<create>> _Dialogue(titre : String, consigne : String, texteOk : String)
+      + terminer(champs : Champ [1..*]) : void
+      + valider() : void
+    }
+
+    class DialogueMotif {
+      - motif : String
+      + <<create>> DialogueMotif(titre : String, action : String)
+      + valider() : void  <<motif obligatoire>>
+    }
+
+    class DialogueAssigner {
+      - numero : int
+      + <<create>> DialogueAssigner(comptes : List<CompteVue>, assigneActuel : String [0..1])
+    }
+
+    class DialoguePriorite {
+      - priorite : Priority
+      + <<create>> DialoguePriorite(actuelle : Priority)
+    }
+
+    class DialogueTitre {
+      - titre : String
+      + <<create>> DialogueTitre(actuel : String)
+      + valider() : void
+    }
+
+    class DialogueConfirmation {
+      + <<create>> DialogueConfirmation(titre : String, message : String, texteOk : String)
+    }
+  }
+
+  package "Widgets communs et theme" {
+
+    class TailleDuTexte {
+      - echelle : int  <<100 a 200 %>>
+      + <<create>> TailleDuTexte(app : QApplication)
+      + regler(pourcentage : int) : void
+      + plus() : void
+      + moins() : void
+    }
+
+    class BandeauResultat <<QFrame>> {
+      - texte : String
+      + <<create>> BandeauResultat()
+      + succes(message : String, details : List<String>) : void
+      + refus(motif : String) : void
+      + information(message : String) : void
+      + afficher(resultat : Resultat, messageOk : String) : void  <<OK ou REFUSE, annonce au lecteur d'ecran>>
+    }
+
+    class Champ <<QWidget>> {
+      - messageErreur : String
+      + <<create>> Champ(libelle : String, widget : QWidget, aide : String [0..1], obligatoire : boolean)
+      + erreur(message : String) : void
+      + effacerErreur() : void
+    }
+
+    class Pastille <<QWidget>> {
+      - libelle : String  <<nom et icone, jamais la couleur seule>>
+      + <<create>> Pastille(valeur : Status ou Priority)
+      + changer(valeur : Status ou Priority) : void
+    }
+
+    class DelegatePastille <<QStyledItemDelegate>> {
+    }
+  }
+}
+
+_Dialogue <|-- DialogueMotif
+_Dialogue <|-- DialogueAssigner
+_Dialogue <|-- DialoguePriorite
+_Dialogue <|-- DialogueTitre
+_Dialogue <|-- DialogueConfirmation
+_Dialogue <|-- DialogueRole
+
+FenetreConnexion --> "1" ServiceComptes : comptes
+FenetreInscription --> "1" ServiceComptes : comptes
+FenetreComptes --> "1" ServiceComptes : comptes
+FenetrePrincipale --> "1" ServiceComptes : comptes
+FenetrePrincipale --> "1" ServiceTickets : tickets
+FenetrePrincipale --> "1" TailleDuTexte : taille
+FenetrePrincipale --> "0..*" FenetreDetail : details
+FenetreDetail --> "1" ServiceTickets : tickets
+FenetreNouveauTicket --> "1" ServiceTickets : tickets
+DialogueAjout --> "1" ServiceTickets : tickets
+FenetreConnexion ..> FenetreInscription : F2
+FenetrePrincipale ..> FenetreNouveauTicket : F5
+FenetrePrincipale ..> FenetreComptes : F8
+FenetrePrincipale ..> FenetreProfil : F9
+FenetrePrincipale ..> FenetreAide : F10
+FenetreDetail ..> DialogueAjout : F6
+FenetreDetail ..> _Dialogue : F7
+FenetreComptes ..> DialogueRole
+FenetreDetail ..> DetailTicket : <<use>>
+FenetreProfil ..> Profil : <<use>>
+FenetrePrincipale ..> DelegatePastille : <<use>>
+FenetreDetail ..> Pastille : <<use>>
+FenetreDetail ..> BandeauResultat : <<use>>
+
+legend bottom right
+  Convention : chaque attribut du compartiment a un accesseur public en lecture (getX), non dessine, sauf s'il est dessine avec une autre visibilite ou marque {secret} (aucun accesseur).
+  Les extremites d'association n'ont que les accesseurs dessines. Les seuls mutateurs sont ceux dessines.
+  Une methode controlee renvoie false, vide ou rien en cas de refus, sans effet de bord.
+  actor : compte obtenu par UserRegistry.authenticate ; tout compte absent du registre injecte est refuse.
+endlegend
+
+@enduml

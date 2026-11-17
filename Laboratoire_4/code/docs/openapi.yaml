@@ -1,0 +1,1678 @@
+openapi: 3.1.0
+info:
+  title: 'Gestionnaire de tickets : API REST'
+  description: 'API REST du gestionnaire de tickets (6GEI311, laboratoire 4).
+
+
+    Toutes les regles restent celles du modele du labo 2 : le serveur ne fait que les exposer.
+
+    Pour essayer : `POST /api/v1/sessions` avec un compte de demonstration (alice@uqac.ca / alice-2026),
+
+    puis bouton **Authorize** avec le jeton recu.
+
+
+    Erreurs : toujours `{motif, details, cause}`. 401 jeton absent ou invalide ; 403 permission absente des
+
+    roles ; 404 ressource inexistante ou invisible ; 409 l''etat du ticket ne le permet pas ; 422 argument refuse.
+
+    '
+  version: 4.0.0
+paths:
+  /api/v1/sante:
+    get:
+      tags:
+      - service
+      summary: Le serveur repond (utilise par le client pour le reveiller)
+      operationId: sante_api_v1_sante_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sante'
+  /api/v1/sessions:
+    post:
+      tags:
+      - sessions
+      summary: 'Se connecter : echange courriel et mot de passe contre un jeton d''acces'
+      operationId: ouvrir_session_api_v1_sessions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Connexion'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionJSON'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+  /api/v1/moi:
+    get:
+      tags:
+      - sessions
+      summary: 'Profil du compte connecte : roles et permissions'
+      operationId: moi_api_v1_moi_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilJSON'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+      security:
+      - HTTPBearer: []
+  /api/v1/comptes:
+    post:
+      tags:
+      - comptes
+      summary: S'inscrire (role Rapporteur)
+      operationId: inscrire_api_v1_comptes_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Inscription'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inscrit'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+    get:
+      tags:
+      - comptes
+      summary: Lister les comptes (MANAGE_USERS), ou seulement ceux qu'on peut assigner
+      operationId: lister_comptes_api_v1_comptes_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: assignables
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Assignables
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CompteJSON'
+                title: Response Lister Comptes Api V1 Comptes Get
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/comptes/{numero}:
+    patch:
+      tags:
+      - comptes
+      summary: Activer ou desactiver un compte (MANAGE_USERS)
+      operationId: modifier_compte_api_v1_comptes__numero__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModifCompte'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inscrit'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/comptes/{numero}/roles:
+    post:
+      tags:
+      - comptes
+      summary: Attribuer un role a un compte (MANAGE_USERS)
+      operationId: attribuer_role_api_v1_comptes__numero__roles_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NouveauRole'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inscrit'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/comptes/{numero}/roles/{role}:
+    delete:
+      tags:
+      - comptes
+      summary: Retirer un role a un compte (MANAGE_USERS)
+      operationId: retirer_role_api_v1_comptes__numero__roles__role__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      - name: role
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Role
+      responses:
+        '204':
+          description: Successful Response
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets:
+    get:
+      tags:
+      - tickets
+      summary: Lister les tickets actifs visibles, filtres par le modele
+      operationId: lister_api_v1_tickets_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: filtre
+        in: query
+        required: false
+        schema:
+          enum:
+          - mes_tickets
+          - tous
+          - assignes_a_moi
+          type: string
+          default: mes_tickets
+          title: Filtre
+      - name: statut
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Status'
+          - type: 'null'
+          title: Statut
+      - name: priorite
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/Priority'
+          - type: 'null'
+          title: Priorite
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LigneJSON'
+                title: Response Lister Api V1 Tickets Get
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+    post:
+      tags:
+      - tickets
+      summary: Creer un ticket (CREATE), avec un premier texte facultatif
+      operationId: creer_api_v1_tickets_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NouveauTicket'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketCree'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets/{numero}:
+    get:
+      tags:
+      - tickets
+      summary: 'Consulter un ticket : blocs a afficher et actions permises maintenant'
+      operationId: consulter_api_v1_tickets__numero__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailJSON'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+    patch:
+      tags:
+      - tickets
+      summary: Modifier le titre (EDIT) et/ou la priorite (SET_PRIORITY)
+      operationId: modifier_api_v1_tickets__numero__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModifTicket'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetailJSON'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets/{numero}/contenus:
+    get:
+      tags:
+      - description
+      summary: 'Lister la description : textes, images et videos, dans l''ordre'
+      operationId: contenus_api_v1_tickets__numero__contenus_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  oneOf:
+                  - $ref: '#/components/schemas/BlocTexteJSON'
+                  - $ref: '#/components/schemas/BlocImageJSON'
+                  - $ref: '#/components/schemas/BlocVideoJSON'
+                  discriminator:
+                    propertyName: type
+                    mapping:
+                      texte: '#/components/schemas/BlocTexteJSON'
+                      image: '#/components/schemas/BlocImageJSON'
+                      video: '#/components/schemas/BlocVideoJSON'
+                title: Response Contenus Api V1 Tickets  Numero  Contenus Get
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets/{numero}/textes:
+    post:
+      tags:
+      - description
+      summary: Ajouter un texte a la description (ATTACH, auteur)
+      operationId: ajouter_texte_api_v1_tickets__numero__textes_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Texte'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlocTexteJSON'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets/{numero}/images:
+    post:
+      tags:
+      - description
+      summary: Joindre une image .png, .jpg ou .gif (ATTACH, auteur)
+      operationId: joindre_image_api_v1_tickets__numero__images_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_joindre_image_api_v1_tickets__numero__images_post'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlocImageJSON'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets/{numero}/images/{nom}:
+    get:
+      tags:
+      - description
+      summary: Telecharger une image de la description (seulement si le ticket est visible)
+      operationId: telecharger_image_api_v1_tickets__numero__images__nom__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      - name: nom
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Nom
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            image/png: {}
+            image/jpeg: {}
+            image/gif: {}
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets/{numero}/commentaires:
+    get:
+      tags:
+      - commentaires
+      summary: Lister les commentaires d'un ticket
+      operationId: commentaires_api_v1_tickets__numero__commentaires_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BlocCommentaireJSON'
+                title: Response Commentaires Api V1 Tickets  Numero  Commentaires Get
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+    post:
+      tags:
+      - commentaires
+      summary: Commenter un ticket (COMMENT)
+      operationId: commenter_api_v1_tickets__numero__commentaires_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Texte'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlocCommentaireJSON'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/tickets/{numero}/transitions:
+    post:
+      tags:
+      - cycle de vie
+      summary: 'Demander une transition : assigner, soumettre, valider, rejeter, fermer ou rouvrir'
+      description: Le modele accepte ou refuse selon l'etat du ticket et les roles du compte (patron State).
+      operationId: transition_api_v1_tickets__numero__transitions_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: numero
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Numero
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transition'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitionJSON'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+          description: Unprocessable Entity
+  /api/v1/archives:
+    get:
+      tags:
+      - archives
+      summary: Lister les tickets archives visibles
+      operationId: archives_api_v1_archives_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/LigneJSON'
+                type: array
+                title: Response Archives Api V1 Archives Get
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - archives
+      summary: Archiver un ticket (ARCHIVE)
+      operationId: archiver_api_v1_archives_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Archivage'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LigneJSON'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+      security:
+      - HTTPBearer: []
+components:
+  schemas:
+    Archivage:
+      properties:
+        numero:
+          type: integer
+          title: Numero
+      type: object
+      required:
+      - numero
+      title: Archivage
+    BlocCommentaireJSON:
+      properties:
+        type:
+          type: string
+          const: commentaire
+          title: Type
+          default: commentaire
+        numero:
+          type: integer
+          title: Numero
+        auteur:
+          type: string
+          title: Auteur
+        publie_le:
+          type: string
+          format: date-time
+          title: Publie Le
+        texte:
+          type: string
+          title: Texte
+      type: object
+      required:
+      - numero
+      - auteur
+      - publie_le
+      - texte
+      title: BlocCommentaireJSON
+    BlocImageJSON:
+      properties:
+        type:
+          type: string
+          const: image
+          title: Type
+          default: image
+        nom:
+          type: string
+          title: Nom
+        url:
+          type: string
+          title: Url
+        largeur:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Largeur
+        hauteur:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Hauteur
+      type: object
+      required:
+      - nom
+      - url
+      - largeur
+      - hauteur
+      title: BlocImageJSON
+    BlocTexteJSON:
+      properties:
+        type:
+          type: string
+          const: texte
+          title: Type
+          default: texte
+        nom:
+          type: string
+          title: Nom
+        texte:
+          type: string
+          title: Texte
+      type: object
+      required:
+      - nom
+      - texte
+      title: BlocTexteJSON
+    BlocTicketJSON:
+      properties:
+        type:
+          type: string
+          const: ticket
+          title: Type
+          default: ticket
+        numero:
+          type: integer
+          title: Numero
+        titre:
+          type: string
+          title: Titre
+        statut:
+          $ref: '#/components/schemas/Status'
+        priorite:
+          $ref: '#/components/schemas/Priority'
+        auteur:
+          type: string
+          title: Auteur
+        assigne:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assigne
+        cree_le:
+          type: string
+          format: date-time
+          title: Cree Le
+        modifie_le:
+          type: string
+          format: date-time
+          title: Modifie Le
+        archive_le:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Archive Le
+      type: object
+      required:
+      - numero
+      - titre
+      - statut
+      - priorite
+      - auteur
+      - assigne
+      - cree_le
+      - modifie_le
+      - archive_le
+      title: BlocTicketJSON
+    BlocVideoJSON:
+      properties:
+        type:
+          type: string
+          const: video
+          title: Type
+          default: video
+        nom:
+          type: string
+          title: Nom
+      type: object
+      required:
+      - nom
+      title: BlocVideoJSON
+    Body_joindre_image_api_v1_tickets__numero__images_post:
+      properties:
+        fichier:
+          type: string
+          contentMediaType: application/octet-stream
+          title: Fichier
+      type: object
+      required:
+      - fichier
+      title: Body_joindre_image_api_v1_tickets__numero__images_post
+    CompteJSON:
+      properties:
+        numero:
+          type: integer
+          title: Numero
+        nom:
+          type: string
+          title: Nom
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+        actif:
+          type: boolean
+          title: Actif
+      type: object
+      required:
+      - numero
+      - nom
+      - roles
+      - actif
+      title: CompteJSON
+    Connexion:
+      properties:
+        courriel:
+          type: string
+          title: Courriel
+          examples:
+          - alice@uqac.ca
+        mot_de_passe:
+          type: string
+          title: Mot De Passe
+          examples:
+          - alice-2026
+      type: object
+      required:
+      - courriel
+      - mot_de_passe
+      title: Connexion
+    DetailJSON:
+      properties:
+        numero:
+          type: integer
+          title: Numero
+        blocs:
+          items:
+            oneOf:
+            - $ref: '#/components/schemas/BlocTicketJSON'
+            - $ref: '#/components/schemas/BlocTexteJSON'
+            - $ref: '#/components/schemas/BlocImageJSON'
+            - $ref: '#/components/schemas/BlocVideoJSON'
+            - $ref: '#/components/schemas/BlocCommentaireJSON'
+            discriminator:
+              propertyName: type
+              mapping:
+                commentaire: '#/components/schemas/BlocCommentaireJSON'
+                image: '#/components/schemas/BlocImageJSON'
+                texte: '#/components/schemas/BlocTexteJSON'
+                ticket: '#/components/schemas/BlocTicketJSON'
+                video: '#/components/schemas/BlocVideoJSON'
+          type: array
+          title: Blocs
+        actions:
+          items:
+            $ref: '#/components/schemas/Permission'
+          type: array
+          title: Actions
+        texte:
+          type: string
+          title: Texte
+      type: object
+      required:
+      - numero
+      - blocs
+      - actions
+      - texte
+      title: DetailJSON
+    Erreur:
+      properties:
+        motif:
+          type: string
+          title: Motif
+          examples:
+          - valider exige l'etat VALIDATION
+        details:
+          items:
+            type: string
+          type: array
+          title: Details
+          default: []
+        cause:
+          type: string
+          title: Cause
+          examples:
+          - CONFLIT
+      type: object
+      required:
+      - motif
+      - cause
+      title: Erreur
+    Inscription:
+      properties:
+        nom:
+          type: string
+          title: Nom
+        courriel:
+          type: string
+          title: Courriel
+        mot_de_passe:
+          type: string
+          title: Mot De Passe
+        confirmation:
+          type: string
+          title: Confirmation
+      type: object
+      required:
+      - nom
+      - courriel
+      - mot_de_passe
+      - confirmation
+      title: Inscription
+    Inscrit:
+      properties:
+        nom:
+          type: string
+          title: Nom
+      type: object
+      required:
+      - nom
+      title: Inscrit
+    LigneJSON:
+      properties:
+        numero:
+          type: integer
+          title: Numero
+        titre:
+          type: string
+          title: Titre
+        statut:
+          $ref: '#/components/schemas/Status'
+        priorite:
+          $ref: '#/components/schemas/Priority'
+        auteur:
+          type: string
+          title: Auteur
+        assigne:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Assigne
+        modifie_le:
+          type: string
+          format: date-time
+          title: Modifie Le
+        archive:
+          type: boolean
+          title: Archive
+      type: object
+      required:
+      - numero
+      - titre
+      - statut
+      - priorite
+      - auteur
+      - assigne
+      - modifie_le
+      - archive
+      title: LigneJSON
+    ModifCompte:
+      properties:
+        actif:
+          type: boolean
+          title: Actif
+      type: object
+      required:
+      - actif
+      title: ModifCompte
+    ModifTicket:
+      properties:
+        titre:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Titre
+        priorite:
+          anyOf:
+          - $ref: '#/components/schemas/Priority'
+          - type: 'null'
+      type: object
+      title: ModifTicket
+    NouveauRole:
+      properties:
+        role:
+          type: string
+          enum:
+          - Rapporteur
+          - Developpeur
+          - Administrateur
+          title: Role
+      type: object
+      required:
+      - role
+      title: NouveauRole
+    NouveauTicket:
+      properties:
+        titre:
+          type: string
+          title: Titre
+          examples:
+          - Le bouton Enregistrer ne repond plus
+        priorite:
+          $ref: '#/components/schemas/Priority'
+          default: NORMALE
+        texte:
+          type: string
+          title: Texte
+          default: ''
+      type: object
+      required:
+      - titre
+      title: NouveauTicket
+    Permission:
+      type: string
+      enum:
+      - VIEW
+      - COMMENT
+      - EXPORT
+      - CREATE
+      - EDIT
+      - ATTACH
+      - ASSIGN
+      - SUBMIT
+      - VALIDATE
+      - REJECT
+      - CLOSE
+      - REOPEN
+      - SET_PRIORITY
+      - ARCHIVE
+      - VIEW_ALL
+      - MANAGE_USERS
+      title: Permission
+    Priority:
+      type: string
+      enum:
+      - BASSE
+      - NORMALE
+      - HAUTE
+      title: Priority
+    ProfilJSON:
+      properties:
+        numero:
+          type: integer
+          title: Numero
+        nom:
+          type: string
+          title: Nom
+        roles:
+          items:
+            type: string
+          type: array
+          title: Roles
+        permissions:
+          items:
+            $ref: '#/components/schemas/Permission'
+          type: array
+          title: Permissions
+      type: object
+      required:
+      - numero
+      - nom
+      - roles
+      - permissions
+      title: ProfilJSON
+    Sante:
+      properties:
+        etat:
+          type: string
+          title: Etat
+          default: ok
+        version:
+          type: string
+          title: Version
+      type: object
+      required:
+      - version
+      title: Sante
+    SessionJSON:
+      properties:
+        jeton:
+          type: string
+          title: Jeton
+        type:
+          type: string
+          title: Type
+          default: bearer
+        expire_le:
+          type: string
+          format: date-time
+          title: Expire Le
+        profil:
+          $ref: '#/components/schemas/ProfilJSON'
+      type: object
+      required:
+      - jeton
+      - expire_le
+      - profil
+      title: SessionJSON
+    Status:
+      type: string
+      enum:
+      - OUVERT
+      - ASSIGNE
+      - VALIDATION
+      - TERMINE
+      - FERME
+      title: Status
+    Texte:
+      properties:
+        texte:
+          type: string
+          title: Texte
+      type: object
+      required:
+      - texte
+      title: Texte
+    TicketCree:
+      properties:
+        numero:
+          type: integer
+          title: Numero
+        details:
+          items:
+            type: string
+          type: array
+          title: Details
+          default: []
+      type: object
+      required:
+      - numero
+      title: TicketCree
+    Transition:
+      properties:
+        action:
+          type: string
+          enum:
+          - assigner
+          - soumettre
+          - valider
+          - rejeter
+          - fermer
+          - rouvrir
+          title: Action
+        motif:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Motif
+          description: exige pour rejeter, fermer et rouvrir
+        assigne:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Assigne
+          description: numero du compte, exige pour assigner
+      type: object
+      required:
+      - action
+      title: Transition
+    TransitionJSON:
+      properties:
+        action:
+          type: string
+          enum:
+          - assigner
+          - soumettre
+          - valider
+          - rejeter
+          - fermer
+          - rouvrir
+          title: Action
+        statut:
+          $ref: '#/components/schemas/Status'
+      type: object
+      required:
+      - action
+      - statut
+      title: TransitionJSON
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      description: Jeton recu de POST /api/v1/sessions
+      scheme: bearer
+tags:
+- name: sessions
+  description: Connexion (jeton d'acces) et profil du compte connecte
+- name: comptes
+  description: Inscription, liste, roles, activation
+- name: tickets
+  description: Creation, liste, consultation, titre et priorite
+- name: description
+  description: Textes et images de la description d'un ticket
+- name: commentaires
+  description: Commentaires d'un ticket
+- name: cycle de vie
+  description: Transitions du patron State
+- name: archives
+  description: Tickets archives
+- name: service
+  description: Etat du serveur
