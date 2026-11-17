@@ -1,5 +1,3 @@
-
-
 # Python
 __pycache__/
 *.pyc
@@ -20,4 +18,10 @@ Partie_2/*.docx
 *.zip
 Laboratoire_3/*.docx
 Laboratoire_3/*.pdf
->>>>>>> 80fd48d9dbfc73b2866c1c77b156b26950795bc2
+Laboratoire_4/*.docx
+Laboratoire_4/*.pdf
+
+# Variables d'environnement et fichiers système
+.env
+.DS_Store
+Thumbs.db

@@ -1,14 +1,15 @@
-# Laboratoires 2, 3 et 4 : système de gestion de tickets (6GEI311)
+# Laboratoires 2 à 5 : système de gestion de tickets et déploiement (6GEI311)
 
 Cours 6GEI311 Architecture des logiciels, UQAC, automne 2026.
 Équipe : Christian Kevin Sawadogo et Jeremie Soppewe Arno Tchawo.
 
-Ce dépôt contient les deux parties du laboratoire 2, puis les laboratoires 3 et 4 :
+Ce dépôt contient les deux parties du laboratoire 2, puis les laboratoires 3 à 5 :
 
 - **Partie 1** (`Partie_1/`) : l'implémentation en Python du diagramme de classes fourni par l'énoncé, avec un programme principal interactif ;
 - **Partie 2** (`Partie_2/`) : la conception améliorée. La description d'un ticket accepte du texte, des images et des vidéos ; elle se consulte à l'écran ou s'exporte en PDF. Le dossier contient aussi le nouveau diagramme et le rapport ;
 - **Laboratoire 3** (`Laboratoire_3/`) : une interface graphique PySide6 branchée sur le modèle de la partie 2, conforme à WCAG 2.2 niveau AA. Son [README](Laboratoire_3/code/README.md) tient lieu de rapport : installation, architecture, connexion, accessibilité, captures de toutes les fenêtres, vérification et leçons ;
-- **Laboratoire 4** (`Laboratoire_4/`) : le système devient distribué. Le modèle s'expose par une API REST (FastAPI) déployée sur Render ; l'interface PySide6 l'utilise à distance sans changer de fenêtre, et une page web utilise la même API. Voir son [README](Laboratoire_4/code/README.md).
+- **Laboratoire 4** (`Laboratoire_4/`) : le système devient distribué. Le modèle s'expose par une API REST (FastAPI) déployée sur Render ; l'interface PySide6 l'utilise à distance sans changer de fenêtre, et une page web utilise la même API. Voir son [README](Laboratoire_4/code/README.md) ;
+- **Laboratoire 5** (`Laboratoire_5/`) : une petite application Flask déployée en deux copies derrière un distributeur de charge nginx. Son [README](Laboratoire_5/README.md) contient la préparation et les réponses de la manip.
 
 Le reste de ce document porte sur le laboratoire 2.
 
@@ -312,9 +313,11 @@ lab2-architecture-de-logiciel/
 │   └── code/                     interface graphique, modèle, tests ; son README sert de rapport
 ├── Laboratoire_4/
 │   └── code/                     contrat, serveur REST, client, page web, tests ; voir son README
+├── Laboratoire_5/                application Flask, configuration nginx, README de remise
 ├── docs/
 │   ├── Description_partie_1.pdf  énoncé de la partie 1
 │   ├── Enonce_Lab2_6GEI311.pdf   énoncé complet du laboratoire 2
+│   ├── Enonce_Lab5_6GEI311.pdf   énoncé du laboratoire 5
 │   └── images/                   captures d'écran des parties 1 et 2
 └── .gitignore                    fichiers générés exclus du dépôt
 ```
