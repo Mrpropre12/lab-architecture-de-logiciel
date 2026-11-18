@@ -13,7 +13,7 @@ Une petite application Flask tourne en deux copies, sur deux machines, derrière
 | `nginx.conf` | Bloc `http { ... }` à mettre dans `conf/nginx.conf` de nginx, sur la machine du membre A |
 | `requirements.txt` | Flask |
 
-## Préparer la manip (Windows)
+## Préparation de la manipulation
 
 1. **Installer Flask**, depuis ce dossier :
    ```
@@ -36,15 +36,11 @@ Une petite application Flask tourne en deux copies, sur deux machines, derrière
    tasklist /fi "imagename eq nginx.exe"    vérifier qu'il tourne
    ```
 
-**Correction de la configuration de l'énoncé.** Le bloc `location /` fourni contient `try_files $uri $uri/ =404;` en plus de `proxy_pass`. `try_files` s'exécute avant `proxy_pass` : nginx cherche d'abord un fichier dans son propre dossier `html` et répond lui-même (sa page d'accueil ou une erreur 404), sans jamais transmettre la requête aux applications. Notre `nginx.conf` retire cette ligne.
-
 ## Rôles
 
 | Membre A (son code, nginx sur sa machine) | Membre B (lance le code de A sur sa machine) |
 |---|---|
 | Christian : `app_SCK.py`, port 3000 | Jérémie : copie de `app_SCK.py` avec **son** IP et le port 3001 |
-
-Les deux changements du membre B (étape 11 : son IP, port 3001) restent sur sa machine : ils ne se committent pas par-dessus le fichier du membre A.
 
 ## Journal de la manip (Christian membre A, Jérémie membre B), 17 et 18 novembre 2026
 
@@ -63,9 +59,8 @@ Les deux changements du membre B (étape 11 : son IP, port 3001) restent sur sa 
 | 14 et 15 | Bloc `http` de `C:\Users\kevin\nginx-1.31.8\conf\nginx.conf` remplacé par `nginx.conf` (`172.20.10.4:3000` et `172.20.10.3:3001`), `nginx -t`, `nginx -s reload` | configuration valide, rechargée sans arrêter nginx |
 | 16 et 17 | Observations | voir les réponses plus bas |
 
-## Réponses aux questions de la manip
+## Réponses aux questions de la manipulation
 
-Observations de la manip (Christian membre A, Jérémie membre B) : l'étape 6 le 17 novembre 2026 sur eduroam, les étapes 16 et 17 le 18 novembre, les deux machines sur le partage de connexion d'un téléphone.
 
 ### Étape 6 : l'application est arrêtée, on recharge http://IP_DE_LA_MACHINE:3000/
 
@@ -87,7 +82,5 @@ b. http://172.20.10.4:8181/ : l'application reste accessible ; on observe la pag
 - **Choisir la bonne adresse IP.** Un ordinateur a plusieurs cartes réseau. Notre première version utilisait `192.168.56.1`, l'adresse de la carte virtuelle de VirtualBox, que l'autre machine ne peut pas joindre ; la bonne est celle de la carte Wi-Fi. Sur eduroam, cette adresse est attribuée à chaque connexion et peut changer d'une séance à l'autre.
 - **Le réseau lui-même peut empêcher le déploiement.** Sur eduroam, nos deux machines avaient des adresses du même sous-réseau, mais ne pouvaient pas se joindre : le réseau sans fil de l'université isole les appareils entre eux. Le diagnostic l'a montré (`DestinationHostUnreachable`, adresse matérielle introuvable) ; ni le code ni le pare-feu n'étaient en cause. Un réseau à nous, le partage de connexion d'un téléphone, a réglé le problème.
 - **Le pare-feu fait partie du déploiement.** Une page qui s'affiche sur sa propre machine ne prouve pas qu'elle est joignable depuis une autre : Windows classe eduroam comme réseau public et bloque les connexions entrantes tant qu'on ne les autorise pas.
-- **Lire la configuration avant de l'appliquer.** Dans le bloc `location /` de l'énoncé, `try_files` passe avant `proxy_pass` : nginx cherche d'abord un fichier dans son propre dossier et répond lui-même, au lieu de transmettre la requête aux applications. Notre `nginx.conf` retire cette ligne, et la répartition a fonctionné.
 - **Un distributeur de charge répartit les requêtes et masque les pannes.** Derrière nginx, les clients n'utilisent qu'une seule adresse, et nginx alterne entre les copies de l'application (étape 16). Pour absorber plus de requêtes, il suffit d'ajouter une copie dans le groupe `upstream`, sans rien changer côté client. Quand une copie tombe, le service reste disponible par l'autre (étape 17), alors qu'avec une seule copie la page disparaissait (étape 6).
-- **Les copies doivent être interchangeables.** Ici, elles ne diffèrent que par l'adresse affichée, ajoutée pour l'expérience. Une application qui garde un état en mémoire, comme le serveur de tickets du labo 4 (données et comptes connectés), se prêterait mal à plusieurs copies : chacune aurait ses propres données, et une requête pourrait tomber sur une copie qui ne connaît pas l'utilisateur. Il faudrait alors partager l'état (base de données commune) ou renvoyer un client toujours vers la même copie.
-- **nginx lui-même devient un point unique de défaillance.** Si la machine A ou nginx s'arrête, plus rien n'est accessible par le port 8181, même si les applications tournent encore. Dans un vrai système, on doublerait aussi le distributeur.
+- **nginx lui-même devient un point unique de défaillance.** Si la machine A ou nginx s'arrête, plus rien n'est accessible par le port 8181.
